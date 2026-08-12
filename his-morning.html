@@ -600,15 +600,27 @@
       <p class="time-chip">For him</p>
       <h1 class="home-hello">Enter your couple code</h1>
       <p class="home-sub">
-        She created a code on her side. Enter it once — then your mornings and nights sync here.
+        She created a code on her side. Type it each time you open The Blooms.
       </p>
-      <input
-        id="his-couple-code"
-        type="text"
-        maxlength="20"
-        placeholder="e.g. ROSE-4242"
-        style="width:100%;border:1px solid rgba(30,74,55,.2);border-radius:14px;padding:.9rem 1rem;font:inherit;text-transform:uppercase;letter-spacing:.04em;margin:1rem 0;background:rgba(255,250,244,.9)"
-      />
+      <form id="his-pair-form" autocomplete="off" onsubmit="return false">
+        <input
+          id="his-couple-code"
+          name="blooms-couple-code-fresh"
+          type="text"
+          inputmode="text"
+          maxlength="20"
+          placeholder="Enter couple code"
+          value=""
+          autocomplete="off"
+          autocorrect="off"
+          autocapitalize="characters"
+          spellcheck="false"
+          data-lpignore="true"
+          data-1p-ignore="true"
+          data-form-type="other"
+          style="width:100%;border:1px solid rgba(30,74,55,.2);border-radius:14px;padding:.9rem 1rem;font:inherit;text-transform:uppercase;letter-spacing:.04em;margin:1rem 0;background:rgba(255,250,244,.9)"
+        />
+      </form>
       <button type="button" class="btn btn-primary" id="his-pair-btn">Open our garden</button>
       <p class="home-sub" id="his-pair-status" style="margin-top:1rem"></p>
     </section>
@@ -912,9 +924,26 @@
       document.getElementById("read-words").addEventListener("click", openMessage)
       document.getElementById("message-back").addEventListener("click", () => showScreen("bouquet"))
 
-      async function showPairScreen(message) {
+      function clearCoupleCodeField() {
         BloomsStore.setCoupleCode("")
-        document.getElementById("his-couple-code").value = ""
+        const input = document.getElementById("his-couple-code")
+        if (!input) return
+        input.value = ""
+        input.setAttribute("value", "")
+        // Beat browser autofill that runs after load
+        requestAnimationFrame(() => {
+          input.value = ""
+        })
+        setTimeout(() => {
+          input.value = ""
+        }, 50)
+        setTimeout(() => {
+          input.value = ""
+        }, 300)
+      }
+
+      async function showPairScreen(message) {
+        clearCoupleCodeField()
         document.getElementById("his-pair-status").textContent = message || ""
         document.querySelectorAll(".screen").forEach((el) => el.classList.remove("is-active"))
         document.getElementById("pair").classList.add("is-active")
@@ -935,6 +964,12 @@
         // Always ask for the couple code when the app/website opens
         await showPairScreen("Enter your couple code to open The Blooms.")
       }
+
+      window.addEventListener("pageshow", () => {
+        if (document.getElementById("pair")?.classList.contains("is-active")) {
+          clearCoupleCodeField()
+        }
+      })
 
       document.getElementById("change-couple-code").addEventListener("click", () => {
         showPairScreen("Enter the couple code again.")
