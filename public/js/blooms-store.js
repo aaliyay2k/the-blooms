@@ -77,7 +77,12 @@ window.BloomsStore = (function () {
   }
 
   function setCoupleCode(code) {
-    localStorage.setItem(COUPLE_KEY, String(code || "").trim().toUpperCase())
+    const clean = String(code || "").trim().toUpperCase()
+    if (!clean) {
+      localStorage.removeItem(COUPLE_KEY)
+      return
+    }
+    localStorage.setItem(COUPLE_KEY, clean)
   }
 
   async function api(path, options = {}) {
