@@ -194,10 +194,18 @@ window.BloomsStore = (function () {
     return inbox
   }
 
+  function kindLabelFor(kind) {
+    if (kind === "letter") return "Love letter"
+    if (kind === "voice") return "Voice note"
+    return "Small note"
+  }
+
   function deliveryFromSlot(slot) {
     if (!slot || !slot.done) return null
     const key = slot.dateKey || dateKey(dateForWeekSlot(slot.dayIndex))
     const dateLabel = slot.dateLabel || formatDateKey(key)
+    const hasVoice = Boolean(slot.voiceData)
+    const kind = slot.kind || (hasVoice ? "voice" : "note")
     return {
       id: `${key}-${slot.part}`,
       slotId: slot.id,
@@ -210,27 +218,30 @@ window.BloomsStore = (function () {
           ? "A bouquet for your morning."
           : "A bouquet for your night.",
       flowers: (slot.flowers || []).map((f) => ({ ...f })),
-      kind: slot.kind,
-      kindLabel: slot.kind === "letter" ? "Love letter" : "Small note",
-      text: slot.text,
+      kind,
+      kindLabel: kindLabelFor(kind),
+      text: slot.text || (kind === "voice" ? "A voice note for you." : ""),
+      voiceData: slot.voiceData || "",
       savedAt: new Date().toISOString(),
-      unlockHour: slot.part === "night" ? 23 : 0,
+      unlockHour: slot.part === "night" ? 23 : 10,
       unlockMinute: 0,
     }
   }
 
   function saveFromHerSlot(slot) {
     const delivery = deliveryFromSlot(slot)
-    if (!delivery) return null
+    if (!delivery) return Promise.resolve(null)
     upsertLocal(delivery)
     const code = getCoupleCode()
     if (code) {
-      api(`/api/couple/${encodeURIComponent(code)}/deliveries/${encodeURIComponent(delivery.id)}`, {
+      return api(`/api/couple/${encodeURIComponent(code)}/deliveries/${encodeURIComponent(delivery.id)}`, {
         method: "PUT",
         body: JSON.stringify(delivery),
-      }).catch(() => {})
+      })
+        .then(() => delivery)
+        .catch(() => delivery)
     }
-    return delivery
+    return Promise.resolve(delivery)
   }
 
   function syncWeekToInbox(week) {
@@ -244,10 +255,27 @@ window.BloomsStore = (function () {
     })
     const code = getCoupleCode()
     if (code) {
-      api(`/api/couple/${encodeURIComponent(code)}/week`, {
+      return api(`/api/couple/${encodeURIComponent(code)}/week`, {
         method: "PUT",
         body: JSON.stringify({ week, deliveries }),
-      }).catch(() => {})
+      }).catch(() => ({ ok: false }))
+    }
+    return Promise.resolve({ ok: true, local: true })
+  }
+
+  async function pullWeekPlan() {
+    const code = getCoupleCode()
+    if (!code) return { week: null, deliveries: getInbox() }
+    try {
+      const data = await api(`/api/couple/${encodeURIComponent(code)}/week`)
+      if (Array.isArray(data.deliveries)) setInbox(data.deliveries)
+      return {
+        week: Array.isArray(data.week) ? data.week : null,
+        deliveries: getInbox(),
+      }
+    } catch {
+      const deliveries = await pullInbox()
+      return { week: null, deliveries }
     }
   }
 
@@ -297,13 +325,26 @@ window.BloomsStore = (function () {
     write(OPENED_KEY, [...set])
   }
 
+  function minutesInIndia(from = new Date()) {
+    const parts = new Intl.DateTimeFormat("en-GB", {
+      timeZone: "Asia/Kolkata",
+      hour: "2-digit",
+      minute: "2-digit",
+      hour12: false,
+    }).formatToParts(from)
+    const hour = Number(parts.find((p) => p.type === "hour")?.value || 0)
+    const minute = Number(parts.find((p) => p.type === "minute")?.value || 0)
+    return hour * 60 + minute
+  }
+
   function isDeliveryUnlocked(delivery, from = new Date()) {
     if (!delivery) return false
     const today = getTodayKey(from)
     if (delivery.dateKey !== today) return true
-    const mins = from.getHours() * 60 + from.getMinutes()
+    const mins = minutesInIndia(from)
     if (delivery.part === "night") return mins >= 23 * 60 || mins < 5 * 60
-    return true
+    // Morning opens at 10:00 AM India time (not before)
+    return mins >= 10 * 60
   }
 
   async function health() {
@@ -431,6 +472,8 @@ window.BloomsStore = (function () {
     setApiBase,
     pairCouple,
     pullInbox,
+    pullWeekPlan,
+    kindLabelFor,
     health,
     trackAppOpen,
     trackMessageRead,

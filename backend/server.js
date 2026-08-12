@@ -15,7 +15,7 @@ const CRON_SECRET = process.env.CRON_SECRET || ""
 
 const app = express()
 app.use(cors())
-app.use(express.json({ limit: "2mb" }))
+app.use(express.json({ limit: "8mb" }))
 
 function asyncHandler(fn) {
   return (req, res, next) => {
@@ -127,6 +127,19 @@ app.get(
       herName: couple.herName,
       hisName: couple.hisName,
       deliveryCount: couple.deliveries.length,
+    })
+  }),
+)
+
+app.get(
+  "/api/couple/:code/week",
+  requireDb,
+  asyncHandler(async (req, res) => {
+    const couple = await findCouple(req.params.code)
+    res.json({
+      code: couple.code,
+      week: Array.isArray(couple.week) ? couple.week : [],
+      deliveries: sortDeliveries(couple.deliveries || []),
     })
   }),
 )

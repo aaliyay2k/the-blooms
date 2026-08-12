@@ -630,14 +630,14 @@
         <div>
           <p class="brand">The Blooms</p>
           <h1 class="home-hello" id="greeting">Good morning</h1>
-          <p class="home-sub">Two soft deliveries each day — one before 10:00, one at 11:00 at night.</p>
+          <p class="home-sub">Two soft deliveries each day — morning at 10:00, night at 11:00.</p>
           <p class="time-chip" id="home-couple-code" style="margin-top:0.45rem"></p>
         </div>
       </div>
 
       <div class="slot-list">
         <button type="button" class="slot" id="slot-morning">
-          <span class="slot-label">Morning · before 10:00</span>
+          <span class="slot-label">Morning · 10:00 AM</span>
           <p class="slot-title">Today’s morning</p>
           <p class="slot-meta" id="morning-meta">Bouquet + letter from her</p>
           <span class="slot-status" id="morning-status">Open now</span>
@@ -681,15 +681,15 @@
       <button type="button" class="btn btn-primary" data-go="home">Done</button>
     </section>
 
-    <section id="night-wait" class="screen" aria-label="Night waiting">
+    <section id="night-wait" class="screen" aria-label="Waiting for unlock">
       <button type="button" class="back-link" data-go="home">← Home</button>
       <div class="bouquet-stage" style="flex: 1; justify-content: center; text-align: center; gap: 0.85rem">
         <p class="brand">The Blooms</p>
-        <p class="time-chip">Night · 11:00 PM</p>
-        <h1 class="home-hello" style="max-width: 12ch; margin-left: auto; margin-right: auto">
+        <p class="time-chip" id="wait-chip">Night · 11:00 PM</p>
+        <h1 class="home-hello" id="wait-title" style="max-width: 14ch; margin-left: auto; margin-right: auto">
           Tonight opens at night only.
         </h1>
-        <p class="home-sub" style="margin-left: auto; margin-right: auto">
+        <p class="home-sub" id="wait-body" style="margin-left: auto; margin-right: auto">
           Come back at 11:00 PM — your bouquet and note will be waiting.
         </p>
         <button type="button" class="btn btn-primary" data-go="home">Back to today</button>
@@ -728,6 +728,7 @@
       <article class="message-shell" id="message-shell" data-kind="letter">
         <p class="message-kind" id="message-kind">Love letter</p>
         <p class="message-body" id="message-body"></p>
+        <audio id="message-audio" controls playsinline style="display:none;width:100%;margin-top:1rem"></audio>
         <p class="message-sign">— with love</p>
       </article>
 
@@ -736,7 +737,7 @@
       </div>
     </section>
 
-    <script src="./public/js/blooms-store.js?v=20260812f"></script>
+    <script src="./public/js/blooms-store.js?v=20260812h"></script>
     <script>
       const FLOWER_BASE = "https://assets.pauwee.com/color/flowers"
       let activeDelivery = null
@@ -843,6 +844,9 @@
           } else if (unlocked) {
             statusEl.textContent = "Open now"
             statusEl.className = "slot-status"
+          } else if (part === "morning") {
+            statusEl.textContent = "Opens at 10:00 AM"
+            statusEl.className = "slot-status is-waiting"
           } else {
             statusEl.textContent = "Opens at 11:00 PM only"
             statusEl.className = "slot-status is-waiting"
@@ -854,7 +858,18 @@
       function openDelivery(delivery, { ignoreSchedule = false } = {}) {
         if (!delivery) return
 
-        if (!ignoreSchedule && delivery.part === "night" && !BloomsStore.isDeliveryUnlocked(delivery)) {
+        if (!ignoreSchedule && !BloomsStore.isDeliveryUnlocked(delivery)) {
+          if (delivery.part === "morning") {
+            document.getElementById("wait-chip").textContent = "Morning · 10:00 AM"
+            document.getElementById("wait-title").textContent = "This opens at 10:00 AM."
+            document.getElementById("wait-body").textContent =
+              "Come back at 10:00 AM — your bouquet and words will be waiting."
+          } else {
+            document.getElementById("wait-chip").textContent = "Night · 11:00 PM"
+            document.getElementById("wait-title").textContent = "Tonight opens at night only."
+            document.getElementById("wait-body").textContent =
+              "Come back at 11:00 PM — your bouquet and note will be waiting."
+          }
           showScreen("night-wait")
           return
         }
@@ -863,6 +878,8 @@
         document.getElementById("bouquet-when").textContent = delivery.whenLabel
         document.getElementById("bouquet-date").textContent = delivery.dateLabel
         document.getElementById("bouquet-title").textContent = delivery.title
+        document.getElementById("read-words").textContent =
+          delivery.kind === "voice" ? "Play her voice note" : "Read what she wrote"
         renderBouquet(delivery.flowers)
         showScreen("bouquet")
       }
@@ -882,10 +899,21 @@
       function openMessage() {
         if (!activeDelivery) return
         const shell = document.getElementById("message-shell")
+        const audio = document.getElementById("message-audio")
         shell.dataset.kind = activeDelivery.kind
         document.getElementById("message-kind").textContent = activeDelivery.kindLabel
         document.getElementById("kind-label").textContent = activeDelivery.kindLabel
-        document.getElementById("message-body").textContent = activeDelivery.text
+        document.getElementById("message-body").textContent =
+          activeDelivery.kind === "voice"
+            ? activeDelivery.text || "A voice note for you."
+            : activeDelivery.text
+        if (activeDelivery.voiceData) {
+          audio.style.display = "block"
+          audio.src = activeDelivery.voiceData
+        } else {
+          audio.style.display = "none"
+          audio.removeAttribute("src")
+        }
         BloomsStore.markOpened(activeDelivery.id)
         BloomsStore.trackMessageRead(activeDelivery)
         refreshHome()

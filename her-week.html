@@ -493,6 +493,10 @@
         margin: 1rem 0;
       }
 
+      #write-message .kind-toggle {
+        grid-template-columns: 1fr 1fr 1fr;
+      }
+
       .kind-toggle button {
         border: 0;
         background: transparent;
@@ -609,7 +613,7 @@
       <p class="eyebrow">Your side</p>
       <h1 id="week-title">Prepare next week</h1>
       <p class="lede" id="week-range-lede">
-        Make 14 soft deliveries — a bouquet + note or letter for each morning (before 10:00) and
+        Make 14 soft deliveries — a bouquet + letter, note, or voice for each morning (10:00) and
         night (11:00 PM). Dates sync to his side in India time.
       </p>
 
@@ -715,6 +719,7 @@
       <div class="kind-toggle" role="tablist">
         <button type="button" class="is-on" data-kind="letter">Love letter</button>
         <button type="button" data-kind="note">Small note</button>
+        <button type="button" data-kind="voice">Voice note</button>
       </div>
 
       <textarea
@@ -722,7 +727,16 @@
         maxlength="800"
         placeholder="Good morning…"
       ></textarea>
-      <p class="char-count"><span id="char-count">0</span>/800</p>
+      <p class="char-count" id="text-count-row"><span id="char-count">0</span>/800</p>
+
+      <div id="voice-box" hidden style="margin: 0.75rem 0 1rem; display: grid; gap: 0.55rem">
+        <p class="lede" style="margin: 0">Record a short voice note (up to about 60 seconds).</p>
+        <button type="button" class="btn btn-primary" id="voice-record-btn">Hold mic — start recording</button>
+        <button type="button" class="btn btn-ghost" id="voice-stop-btn" hidden>Stop recording</button>
+        <audio id="voice-preview" controls playsinline style="width: 100%; display: none"></audio>
+        <button type="button" class="btn btn-ghost" id="voice-clear-btn" hidden>Remove voice note</button>
+        <p class="count-line" id="voice-status">No voice note yet</p>
+      </div>
 
       <div class="actions">
         <button type="button" class="btn btn-primary" id="to-preview" disabled>Preview</button>
@@ -741,6 +755,7 @@
       <article class="message-shell" id="final-shell" data-kind="letter">
         <p class="message-kind" id="final-kind">Love letter</p>
         <p class="message-body" id="final-body"></p>
+        <audio id="final-voice" controls playsinline style="display: none; width: 100%; margin-top: 0.85rem"></audio>
       </article>
 
       <div class="actions">
@@ -751,7 +766,7 @@
 
     <div class="toast" id="toast">Saved</div>
 
-    <script src="./public/js/blooms-store.js?v=20260812g"></script>
+    <script src="./public/js/blooms-store.js?v=20260812h"></script>
     <script>
       const LEGACY_STORAGE_KEY = "blooms:her-week-v2"
       const OFFSET_KEY = "blooms:plan-week-offset"
@@ -896,51 +911,98 @@
         const stamped = BloomsStore.stampWeekDates(weekData, { weekOffset: offset, mondayKey })
         localStorage.setItem(storageKeyFor(mondayKey), JSON.stringify(stamped))
         localStorage.setItem(OFFSET_KEY, String(offset))
-        BloomsStore.syncWeekToInbox(stamped)
-        return stamped
+        return BloomsStore.syncWeekToInbox(stamped).then(() => stamped)
       }
 
-      /** Pull his inbox / MongoDB deliveries back onto matching date slots (recovers Aug 12 etc.). */
-      async function restoreLettersFromServer(weekData) {
+      function slotHasContent(slot) {
+        return Boolean(slot?.done && ((slot.text && slot.text.trim()) || slot.voiceData))
+      }
+
+      function deliveryHasContent(d) {
+        return Boolean(d && ((d.text && String(d.text).trim()) || d.voiceData))
+      }
+
+      /** Merge cloud week + deliveries so any device shows the same letters/voice notes. */
+      async function syncFromCloud(weekData) {
         if (!BloomsStore.getCoupleCode()) return weekData
         try {
-          const inbox = await BloomsStore.pullInbox()
-          if (!Array.isArray(inbox) || !inbox.length) return weekData
-          const byId = new Map(inbox.map((d) => [`${d.dateKey}-${d.part}`, d]))
-          let restored = 0
+          const { week: remoteWeek, deliveries } = await BloomsStore.pullWeekPlan()
+          const byDate = new Map(
+            (deliveries || []).filter(deliveryHasContent).map((d) => [`${d.dateKey}-${d.part}`, d]),
+          )
+          const byId = new Map()
+          if (Array.isArray(remoteWeek)) {
+            remoteWeek.forEach((s) => {
+              if (s?.id) byId.set(s.id, s)
+            })
+          }
+
+          let changed = 0
           const merged = weekData.map((slot) => {
-            const d = byId.get(`${slot.dateKey}-${slot.part}`)
-            if (!d || !d.text) return slot
-            // Keep newer local edits if both exist and local is done with text
-            if (slot.done && slot.text && slot.text.trim()) return slot
-            restored += 1
+            const remote = byId.get(slot.id)
+            const delivery = byDate.get(`${slot.dateKey}-${slot.part}`)
+            const source =
+              remote && slotHasContent(remote)
+                ? remote
+                : delivery
+                  ? {
+                      flowers: delivery.flowers,
+                      kind: delivery.kind,
+                      text: delivery.text,
+                      voiceData: delivery.voiceData,
+                      done: true,
+                    }
+                  : null
+
+            if (!source) return slot
+            if (slotHasContent(slot) && !delivery?.voiceData && slot.voiceData) return slot
+            if (slotHasContent(slot) && slot.text && (!source.text || source.text === slot.text) && !source.voiceData)
+              return slot
+
+            const nextText = source.text || slot.text || ""
+            const nextVoice = source.voiceData || slot.voiceData || ""
+            const nextKind = source.kind || (nextVoice ? "voice" : slot.kind)
+            if (
+              slot.done &&
+              slot.text === nextText &&
+              (slot.voiceData || "") === nextVoice &&
+              slot.kind === nextKind
+            ) {
+              return slot
+            }
+            changed += 1
             return {
               ...slot,
-              flowers: normalizeFlowers(d.flowers),
-              kind: d.kind || slot.kind,
-              text: d.text || "",
+              flowers: normalizeFlowers(source.flowers || slot.flowers),
+              kind: nextKind,
+              text: nextText,
+              voiceData: nextVoice,
               done: true,
             }
           })
-          if (restored > 0) toast(`Restored ${restored} saved letter${restored === 1 ? "" : "s"}`)
+          if (changed > 0) toast(`Synced ${changed} from cloud`)
           return merged
         } catch {
           return weekData
         }
       }
 
+      async function restoreLettersFromServer(weekData) {
+        return syncFromCloud(weekData)
+      }
+
       function setWeekOffset(nextOffset) {
         const offset = Number(nextOffset) === 0 ? 0 : 1
         if (offset === weekOffset) return
-        week = saveWeek(week, weekOffset)
-        weekOffset = offset
-        localStorage.setItem(OFFSET_KEY, String(weekOffset))
-        week = loadWeek(weekOffset)
-        restoreLettersFromServer(week).then((merged) => {
-          week = saveWeek(merged, weekOffset)
+        Promise.resolve(saveWeek(week, weekOffset)).then(async () => {
+          weekOffset = offset
+          localStorage.setItem(OFFSET_KEY, String(weekOffset))
+          week = loadWeek(weekOffset)
+          week = await syncFromCloud(week)
+          week = await saveWeek(week, weekOffset)
           renderHome()
+          toast(weekOffset === 1 ? "Planning next week — synced" : "Planning this week — synced")
         })
-        toast(weekOffset === 1 ? "Planning next week — dates synced" : "Planning this week — dates from today")
       }
 
       let week = loadWeek(weekOffset)
@@ -1127,11 +1189,13 @@
       function slotButton(slot) {
         const todayKey = BloomsStore.getTodayKey()
         const isPast = slot.dateKey && slot.dateKey < todayKey
-        const when = slot.part === "morning" ? "Morning · before 10" : "Night · 11:00 PM"
+        const when = slot.part === "morning" ? "Morning · 10:00" : "Night · 11:00 PM"
         const dateHint = slot.dateLabel || (slot.dateKey ? BloomsStore.formatDateKey(slot.dateKey) : "")
         const state = slot.done ? "Ready" : isPast ? "Past · tap to edit" : "Tap to create"
+        const kindLabel =
+          slot.kind === "letter" ? "letter" : slot.kind === "voice" ? "voice" : "note"
         const hint = slot.done
-          ? `${dateHint} · ${slot.flowers.length} flowers · ${slot.kind === "letter" ? "letter" : "note"}`
+          ? `${dateHint} · ${slot.flowers.length} flowers · ${kindLabel}`
           : dateHint || "Bouquet + words"
         return `
           <button type="button" class="slot-card ${slot.done ? "is-done" : ""}" data-edit="${slot.id}" ${
@@ -1151,6 +1215,7 @@
           flowers: normalizeFlowers(slot.flowers).map((f) => ({ ...f })),
           kind: slot.kind,
           text: slot.text,
+          voiceData: slot.voiceData || "",
         }
         topZ = Math.max(10, ...draft.flowers.map((f) => f.z || 0))
         document.getElementById("bouquet-slot-label").textContent = slot.label
@@ -1295,33 +1360,74 @@
         })
       }
 
+      let mediaRecorder = null
+      let recordChunks = []
+
+      function setVoiceUi() {
+        const isVoice = draft.kind === "voice"
+        document.getElementById("voice-box").hidden = !isVoice
+        document.getElementById("voice-box").style.display = isVoice ? "grid" : "none"
+        document.getElementById("message-text").style.display = isVoice ? "none" : "block"
+        document.getElementById("text-count-row").style.display = isVoice ? "none" : "block"
+        const preview = document.getElementById("voice-preview")
+        const clearBtn = document.getElementById("voice-clear-btn")
+        const status = document.getElementById("voice-status")
+        if (draft.voiceData) {
+          preview.style.display = "block"
+          preview.src = draft.voiceData
+          clearBtn.hidden = false
+          status.textContent = "Voice note ready"
+        } else {
+          preview.style.display = "none"
+          preview.removeAttribute("src")
+          clearBtn.hidden = true
+          status.textContent = "No voice note yet"
+        }
+      }
+
       function openMessageWriter() {
         document.getElementById("message-text").value = draft.text || ""
         document.getElementById("char-count").textContent = (draft.text || "").length
-        document.querySelectorAll(".kind-toggle button").forEach((btn) => {
+        document.querySelectorAll("#write-message .kind-toggle button").forEach((btn) => {
           btn.classList.toggle("is-on", btn.getAttribute("data-kind") === draft.kind)
         })
+        setVoiceUi()
         updateMessageButton()
         showScreen("write-message")
       }
 
       function updateMessageButton() {
+        if (draft.kind === "voice") {
+          document.getElementById("to-preview").disabled = !draft.voiceData
+          return
+        }
         const text = document.getElementById("message-text").value.trim()
         document.getElementById("to-preview").disabled = text.length < 2
       }
 
       function openPreview() {
-        draft.text = document.getElementById("message-text").value.trim()
+        if (draft.kind !== "voice") {
+          draft.text = document.getElementById("message-text").value.trim()
+        } else if (!draft.text) {
+          draft.text = "A voice note for you."
+        }
         renderBouquetPreview("final-preview", draft.flowers, false)
         const shell = document.getElementById("final-shell")
         shell.dataset.kind = draft.kind
-        document.getElementById("final-kind").textContent =
-          draft.kind === "letter" ? "Love letter" : "Small note"
+        document.getElementById("final-kind").textContent = BloomsStore.kindLabelFor(draft.kind)
         document.getElementById("final-body").textContent = draft.text
+        const finalVoice = document.getElementById("final-voice")
+        if (draft.kind === "voice" && draft.voiceData) {
+          finalVoice.style.display = "block"
+          finalVoice.src = draft.voiceData
+        } else {
+          finalVoice.style.display = "none"
+          finalVoice.removeAttribute("src")
+        }
         showScreen("preview-message")
       }
 
-      function saveCurrent() {
+      async function saveCurrent() {
         const idx = week.findIndex((s) => s.id === editingId)
         if (idx < 0) return
         week[idx] = {
@@ -1329,12 +1435,13 @@
           flowers: draft.flowers.map((f) => ({ ...f })),
           kind: draft.kind,
           text: draft.text,
+          voiceData: draft.kind === "voice" ? draft.voiceData || "" : "",
           done: true,
         }
-        week = saveWeek(week, weekOffset)
-        BloomsStore.saveFromHerSlot(week[idx])
+        week = await saveWeek(week, weekOffset)
+        await BloomsStore.saveFromHerSlot(week[idx])
         renderHome()
-        toast(weekOffset === 1 ? "Saved for next week" : "Saved for him")
+        toast("Saved & synced")
         showScreen("home")
       }
 
@@ -1353,23 +1460,83 @@
 
       document.getElementById("to-message").addEventListener("click", openMessageWriter)
       document.getElementById("back-to-bouquet").addEventListener("click", () => {
-        draft.text = document.getElementById("message-text").value
+        if (draft.kind !== "voice") draft.text = document.getElementById("message-text").value
         renderBouquetPreview("bouquet-preview", draft.flowers, true)
         showScreen("build-bouquet")
       })
       document.getElementById("remove-selected").addEventListener("click", removeSelected)
       document.getElementById("bring-front").addEventListener("click", bringSelectedForward)
 
-      document.querySelectorAll(".kind-toggle button").forEach((btn) => {
+      document.querySelectorAll("#write-message .kind-toggle button").forEach((btn) => {
         btn.addEventListener("click", () => {
           draft.kind = btn.getAttribute("data-kind")
-          document.querySelectorAll(".kind-toggle button").forEach((b) => b.classList.remove("is-on"))
+          document.querySelectorAll("#write-message .kind-toggle button").forEach((b) => b.classList.remove("is-on"))
           btn.classList.add("is-on")
           const ta = document.getElementById("message-text")
           if (!ta.value.trim()) {
-            ta.placeholder = draft.kind === "note" ? "A small note for him…" : "Good morning…"
+            ta.placeholder =
+              draft.kind === "note" ? "A small note for him…" : "Good morning…"
           }
+          setVoiceUi()
+          updateMessageButton()
         })
+      })
+
+      document.getElementById("voice-record-btn").addEventListener("click", async () => {
+        try {
+          const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
+          recordChunks = []
+          const mime = MediaRecorder.isTypeSupported("audio/webm;codecs=opus")
+            ? "audio/webm;codecs=opus"
+            : MediaRecorder.isTypeSupported("audio/mp4")
+              ? "audio/mp4"
+              : ""
+          mediaRecorder = mime ? new MediaRecorder(stream, { mimeType: mime }) : new MediaRecorder(stream)
+          mediaRecorder.ondataavailable = (e) => {
+            if (e.data.size > 0) recordChunks.push(e.data)
+          }
+          mediaRecorder.onstop = async () => {
+            stream.getTracks().forEach((t) => t.stop())
+            const blob = new Blob(recordChunks, { type: mediaRecorder.mimeType || "audio/webm" })
+            if (blob.size > 1_800_000) {
+              toast("Voice note too long — try a shorter one")
+              document.getElementById("voice-status").textContent = "Too long — record again"
+              return
+            }
+            const reader = new FileReader()
+            reader.onload = () => {
+              draft.voiceData = String(reader.result || "")
+              setVoiceUi()
+              updateMessageButton()
+              toast("Voice note captured")
+            }
+            reader.readAsDataURL(blob)
+          }
+          mediaRecorder.start()
+          document.getElementById("voice-record-btn").hidden = true
+          document.getElementById("voice-stop-btn").hidden = false
+          document.getElementById("voice-status").textContent = "Recording…"
+          setTimeout(() => {
+            if (mediaRecorder && mediaRecorder.state === "recording") mediaRecorder.stop()
+            document.getElementById("voice-record-btn").hidden = false
+            document.getElementById("voice-stop-btn").hidden = true
+          }, 60000)
+        } catch (err) {
+          toast("Microphone permission needed")
+          document.getElementById("voice-status").textContent = err.message || "Mic blocked"
+        }
+      })
+
+      document.getElementById("voice-stop-btn").addEventListener("click", () => {
+        if (mediaRecorder && mediaRecorder.state === "recording") mediaRecorder.stop()
+        document.getElementById("voice-record-btn").hidden = false
+        document.getElementById("voice-stop-btn").hidden = true
+      })
+
+      document.getElementById("voice-clear-btn").addEventListener("click", () => {
+        draft.voiceData = ""
+        setVoiceUi()
+        updateMessageButton()
       })
 
       document.getElementById("message-text").addEventListener("input", (e) => {
@@ -1378,7 +1545,9 @@
       })
 
       document.getElementById("to-preview").addEventListener("click", openPreview)
-      document.getElementById("save-slot").addEventListener("click", saveCurrent)
+      document.getElementById("save-slot").addEventListener("click", () => {
+        saveCurrent().catch(() => toast("Saved on this phone — sync retry later"))
+      })
 
       function refreshPairUI() {
         const input = document.getElementById("couple-code-input")
@@ -1406,9 +1575,11 @@
         }
         try {
           await BloomsStore.pairCouple(code, { role: "her" })
-          week = saveWeek(week, weekOffset)
-          toast("Couple code saved")
+          week = await syncFromCloud(week)
+          week = await saveWeek(week, weekOffset)
+          toast("Couple code saved — synced")
           refreshPairUI()
+          renderHome()
           renderHisActivity()
         } catch (err) {
           BloomsStore.setCoupleCode(code)
@@ -1454,20 +1625,12 @@
         }
       })
 
-      // This week by default (13 onward), restore any letters already synced (incl. 12)
+      // Pull cloud letters onto this device, then push any local-only saves up
       ;(async () => {
-        week = saveWeek(week, weekOffset)
-        week = await restoreLettersFromServer(week)
-        week = saveWeek(week, weekOffset)
+        week = await syncFromCloud(week)
+        week = await saveWeek(week, weekOffset)
         renderHome()
         refreshPairUI()
-        // Scroll toward today / tomorrow so writing starts near the 13th
-        const todayKey = BloomsStore.getTodayKey()
-        const focus = week.find((s) => s.dateKey >= todayKey) || week.find((s) => s.dateKey === todayKey)
-        if (focus) {
-          const btn = document.querySelector(`[data-edit="${focus.id}"]`)
-          btn?.scrollIntoView({ block: "center", behavior: "smooth" })
-        }
       })()
     </script>
   </body>
