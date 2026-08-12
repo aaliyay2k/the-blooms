@@ -913,8 +913,8 @@
       document.getElementById("message-back").addEventListener("click", () => showScreen("bouquet"))
 
       async function showPairScreen(message) {
-        const last = BloomsStore.getCoupleCode()
-        document.getElementById("his-couple-code").value = last || ""
+        BloomsStore.setCoupleCode("")
+        document.getElementById("his-couple-code").value = ""
         document.getElementById("his-pair-status").textContent = message || ""
         document.querySelectorAll(".screen").forEach((el) => el.classList.remove("is-active"))
         document.getElementById("pair").classList.add("is-active")
