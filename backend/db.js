@@ -82,12 +82,33 @@ export async function connectDb() {
   }
 }
 
-export async function getOrCreateCouple(rawCode) {
-  const code = String(rawCode || "")
+export function normalizeCode(rawCode) {
+  return String(rawCode || "")
     .trim()
     .toUpperCase()
     .replace(/\s+/g, "")
+}
 
+export async function findCouple(rawCode) {
+  const code = normalizeCode(rawCode)
+  if (!code || code.length < 4) {
+    const error = new Error("Couple code must be at least 4 characters.")
+    error.status = 400
+    throw error
+  }
+
+  const couple = await Couple.findOne({ code })
+  if (!couple) {
+    const error = new Error("Wrong couple code. Ask her for the correct one.")
+    error.status = 404
+    throw error
+  }
+  return couple
+}
+
+/** Only she creates a space. He must join an existing code. */
+export async function getOrCreateCouple(rawCode) {
+  const code = normalizeCode(rawCode)
   if (!code || code.length < 4) {
     const error = new Error("Couple code must be at least 4 characters.")
     error.status = 400
@@ -102,6 +123,7 @@ export async function getOrCreateCouple(rawCode) {
       hisName: "",
       week: [],
       deliveries: [],
+      pushSubscriptions: [],
     })
   }
   return couple

@@ -3,7 +3,7 @@ import dotenv from "dotenv"
 import express from "express"
 import path from "path"
 import { fileURLToPath } from "url"
-import { connectDb, getOrCreateCouple, isDbReady, sortDeliveries } from "./db.js"
+import { connectDb, findCouple, getOrCreateCouple, isDbReady, sortDeliveries } from "./db.js"
 import { notifyPart, pushEnabled, startNotificationScheduler } from "./notify.js"
 
 dotenv.config()
@@ -53,7 +53,7 @@ app.post(
   "/api/couple/:code/push-subscribe",
   requireDb,
   asyncHandler(async (req, res) => {
-    const couple = await getOrCreateCouple(req.params.code)
+    const couple = await findCouple(req.params.code)
     const subscription = req.body?.subscription
     if (!subscription?.endpoint) {
       return res.status(400).json({ error: "Missing push subscription" })
@@ -92,7 +92,10 @@ app.post(
   "/api/couple",
   requireDb,
   asyncHandler(async (req, res) => {
-    const couple = await getOrCreateCouple(req.body?.code)
+    const role = String(req.body?.role || "her").toLowerCase()
+    const couple =
+      role === "him" ? await findCouple(req.body?.code) : await getOrCreateCouple(req.body?.code)
+
     if (req.body?.herName) couple.herName = String(req.body.herName).trim()
     if (req.body?.hisName) couple.hisName = String(req.body.hisName).trim()
     await couple.save()
@@ -110,7 +113,7 @@ app.get(
   "/api/couple/:code",
   requireDb,
   asyncHandler(async (req, res) => {
-    const couple = await getOrCreateCouple(req.params.code)
+    const couple = await findCouple(req.params.code)
     res.json({
       code: couple.code,
       herName: couple.herName,
@@ -124,7 +127,7 @@ app.put(
   "/api/couple/:code/week",
   requireDb,
   asyncHandler(async (req, res) => {
-    const couple = await getOrCreateCouple(req.params.code)
+    const couple = await findCouple(req.params.code)
     const week = Array.isArray(req.body?.week) ? req.body.week : []
     couple.week = week
 
@@ -152,7 +155,7 @@ app.put(
   "/api/couple/:code/deliveries/:id",
   requireDb,
   asyncHandler(async (req, res) => {
-    const couple = await getOrCreateCouple(req.params.code)
+    const couple = await findCouple(req.params.code)
     const delivery = { ...req.body, id: req.params.id }
     const idx = couple.deliveries.findIndex((d) => d.id === delivery.id)
     if (idx >= 0) couple.deliveries[idx] = { ...couple.deliveries[idx], ...delivery }
@@ -170,7 +173,7 @@ app.get(
   "/api/couple/:code/inbox",
   requireDb,
   asyncHandler(async (req, res) => {
-    const couple = await getOrCreateCouple(req.params.code)
+    const couple = await findCouple(req.params.code)
     res.json({
       code: couple.code,
       herName: couple.herName,
@@ -184,7 +187,7 @@ app.get(
   "/api/couple/:code/today",
   requireDb,
   asyncHandler(async (req, res) => {
-    const couple = await getOrCreateCouple(req.params.code)
+    const couple = await findCouple(req.params.code)
     const today = req.query.date || new Date().toISOString().slice(0, 10)
     const list = couple.deliveries || []
     const morning = list.find((d) => d.dateKey === today && d.part === "morning") || null

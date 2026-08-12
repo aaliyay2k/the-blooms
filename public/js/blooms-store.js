@@ -178,6 +178,7 @@ window.BloomsStore = (function () {
       method: "POST",
       body: JSON.stringify({
         code: clean,
+        role: names.role || "her",
         herName: names.herName || "",
         hisName: names.hisName || "",
       }),

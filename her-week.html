@@ -1067,7 +1067,7 @@
           return
         }
         try {
-          await BloomsStore.pairCouple(code)
+          await BloomsStore.pairCouple(code, { role: "her" })
           BloomsStore.syncWeekToInbox(week)
           toast("Couple code saved")
           refreshPairUI()
