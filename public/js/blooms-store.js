@@ -490,6 +490,7 @@ window.BloomsStore = (function () {
     fetchActivity,
     enablePushNotifications,
     notificationPermission,
+    pushSupported,
     read,
     write,
   }
