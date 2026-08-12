@@ -104,20 +104,30 @@ window.BloomsStore = (function () {
     return d
   }
 
-  /** Attach calendar dates (IST week) to every planner slot. */
-  function stampWeekDates(week, from = new Date()) {
-    const mondayKey = getMondayKeyInIndia(from)
+  /** Attach calendar dates (IST week) to every planner slot.
+   *  weekOffset: 0 = this week, 1 = next week, etc.
+   */
+  function stampWeekDates(week, options = {}) {
+    const from = options.from instanceof Date ? options.from : new Date()
+    const weekOffset = Number(options.weekOffset ?? 0)
+    const mondayKey =
+      options.mondayKey || addDaysToKey(getMondayKeyInIndia(from), weekOffset * 7)
     return (week || []).map((slot) => {
       const key = addDaysToKey(mondayKey, slot.dayIndex)
       const partLabel = slot.part === "morning" ? "Morning" : "Night"
       return {
         ...slot,
         weekStartKey: mondayKey,
+        weekOffset,
         dateKey: key,
         dateLabel: formatDateKey(key),
         label: `${slot.day} · ${partLabel} · ${shortDateKey(key)}`,
       }
     })
+  }
+
+  function planningMondayKey(weekOffset = 1, from = new Date()) {
+    return addDaysToKey(getMondayKeyInIndia(from), Number(weekOffset) * 7)
   }
 
   function getApiBase() {
@@ -318,6 +328,7 @@ window.BloomsStore = (function () {
     formatDateKey,
     shortDateKey,
     stampWeekDates,
+    planningMondayKey,
     formatDate,
     getMonday,
     getCoupleCode,

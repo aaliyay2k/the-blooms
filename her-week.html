@@ -528,11 +528,16 @@
     <section id="home" class="screen is-active">
       <p class="brand">The Blooms</p>
       <p class="eyebrow">Your side</p>
-      <h1>Prepare this week</h1>
+      <h1 id="week-title">Prepare next week</h1>
       <p class="lede" id="week-range-lede">
         Make 14 soft deliveries — a bouquet + note or letter for each morning (before 10:00) and
         night (11:00 PM). Dates sync to his side in India time.
       </p>
+
+      <div class="kind-toggle" id="week-offset-toggle" role="tablist" aria-label="Which week to prepare" style="margin: 0.85rem 0 1rem">
+        <button type="button" data-week-offset="0">This week</button>
+        <button type="button" class="is-on" data-week-offset="1">Next week</button>
+      </div>
 
       <div class="pair-box" id="pair-box">
         <p class="pick-label">Couple code (share once with him — not every day)</p>
@@ -630,9 +635,10 @@
 
     <div class="toast" id="toast">Saved</div>
 
-    <script src="./public/js/blooms-store.js?v=20260812c"></script>
+    <script src="./public/js/blooms-store.js?v=20260812d"></script>
     <script>
-      const STORAGE_KEY = "blooms:her-week-v2"
+      const LEGACY_STORAGE_KEY = "blooms:her-week-v2"
+      const OFFSET_KEY = "blooms:plan-week-offset"
       const MIN_FLOWERS = 4
       const MAX_FLOWERS = 12
       const FLOWER_BASE = "https://assets.pauwee.com/color/flowers"
@@ -657,8 +663,18 @@
       let flowerUid = 1
       let selectedBloomId = null
       let topZ = 10
+      // Default to next week so she prepares ahead; dates sync for that week
+      let weekOffset = Number(localStorage.getItem(OFFSET_KEY) ?? 1) === 0 ? 0 : 1
 
-      function makeEmptyWeek() {
+      function mondayKeyForOffset(offset = weekOffset) {
+        return BloomsStore.planningMondayKey(offset)
+      }
+
+      function storageKeyFor(mondayKey) {
+        return `blooms:her-week:${mondayKey}`
+      }
+
+      function makeEmptyWeek(offset = weekOffset) {
         const slots = []
         DAY_NAMES.forEach((day, dayIndex) => {
           ;["morning", "night"].forEach((part) => {
@@ -675,7 +691,7 @@
             })
           })
         })
-        return BloomsStore.stampWeekDates(slots)
+        return BloomsStore.stampWeekDates(slots, { weekOffset: offset })
       }
 
       function normalizeFlowers(list) {
@@ -721,39 +737,75 @@
         }
       }
 
-      function loadWeek() {
+      function parseWeekRaw(raw) {
+        if (!raw) return null
+        const parsed = JSON.parse(raw)
+        if (!Array.isArray(parsed) || parsed.length !== 14) return null
+        return parsed.map((slot) => ({
+          ...slot,
+          flowers: normalizeFlowers(slot.flowers),
+        }))
+      }
+
+      function loadWeek(offset = weekOffset) {
+        const mondayKey = mondayKeyForOffset(offset)
         try {
-          const raw = localStorage.getItem(STORAGE_KEY) || localStorage.getItem("blooms:her-week")
-          if (!raw) return makeEmptyWeek()
-          const parsed = JSON.parse(raw)
-          if (!Array.isArray(parsed) || parsed.length !== 14) return makeEmptyWeek()
-          const normalized = parsed.map((slot) => ({
-            ...slot,
-            flowers: normalizeFlowers(slot.flowers),
-          }))
-          // Always refresh calendar dates for this IST week so all letters stay aligned
-          return BloomsStore.stampWeekDates(normalized)
+          const keyed = parseWeekRaw(localStorage.getItem(storageKeyFor(mondayKey)))
+          if (keyed) return BloomsStore.stampWeekDates(keyed, { weekOffset: offset, mondayKey })
+
+          // Migrate legacy single-week storage once into the active planning week
+          if (offset === weekOffset) {
+            const legacy =
+              parseWeekRaw(localStorage.getItem(LEGACY_STORAGE_KEY)) ||
+              parseWeekRaw(localStorage.getItem("blooms:her-week"))
+            if (legacy) {
+              const stamped = BloomsStore.stampWeekDates(legacy, { weekOffset: offset, mondayKey })
+              localStorage.setItem(storageKeyFor(mondayKey), JSON.stringify(stamped))
+              return stamped
+            }
+          }
+          return makeEmptyWeek(offset)
         } catch {
-          return makeEmptyWeek()
+          return makeEmptyWeek(offset)
         }
       }
 
-      function saveWeek(weekData) {
-        const stamped = BloomsStore.stampWeekDates(weekData)
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(stamped))
+      function saveWeek(weekData, offset = weekOffset) {
+        const mondayKey = mondayKeyForOffset(offset)
+        const stamped = BloomsStore.stampWeekDates(weekData, { weekOffset: offset, mondayKey })
+        localStorage.setItem(storageKeyFor(mondayKey), JSON.stringify(stamped))
+        localStorage.setItem(OFFSET_KEY, String(offset))
         BloomsStore.syncWeekToInbox(stamped)
         return stamped
       }
 
-      let week = loadWeek()
+      function setWeekOffset(nextOffset) {
+        const offset = Number(nextOffset) === 0 ? 0 : 1
+        if (offset === weekOffset) return
+        week = saveWeek(week, weekOffset)
+        weekOffset = offset
+        localStorage.setItem(OFFSET_KEY, String(weekOffset))
+        week = loadWeek(weekOffset)
+        week = saveWeek(week, weekOffset)
+        renderHome()
+        toast(weekOffset === 1 ? "Planning next week — dates synced" : "Planning this week — dates synced")
+      }
+
+      let week = loadWeek(weekOffset)
       let editingId = null
       let draft = null
 
       function updateWeekRangeCopy() {
-        const monday = week[0]?.dateKey || BloomsStore.getMondayKeyInIndia()
+        const monday = week[0]?.dateKey || mondayKeyForOffset(weekOffset)
         const sunday = BloomsStore.addDaysToKey(monday, 6)
+        const label = weekOffset === 1 ? "Next week" : "This week"
+        document.getElementById("week-title").textContent =
+          weekOffset === 1 ? "Prepare next week" : "Prepare this week"
         document.getElementById("week-range-lede").textContent =
-          `Week of ${BloomsStore.shortDateKey(monday)} – ${BloomsStore.shortDateKey(sunday)} (India time). Make 14 deliveries — morning before 10:00 and night at 11:00 PM.`
+          `${label}: ${BloomsStore.shortDateKey(monday)} – ${BloomsStore.shortDateKey(sunday)} (India time). Save once and every letter syncs to him on that date.`
+        document.querySelectorAll("#week-offset-toggle [data-week-offset]").forEach((btn) => {
+          btn.classList.toggle("is-on", Number(btn.getAttribute("data-week-offset")) === weekOffset)
+        })
       }
 
       function showScreen(id) {
@@ -785,7 +837,7 @@
           const night = week.find((s) => s.dayIndex === dayIndex && s.part === "night")
           const dayDate = morning?.dateKey
             ? BloomsStore.shortDateKey(morning.dateKey)
-            : BloomsStore.shortDateKey(BloomsStore.addDaysToKey(BloomsStore.getMondayKeyInIndia(), dayIndex))
+            : BloomsStore.shortDateKey(BloomsStore.addDaysToKey(mondayKeyForOffset(weekOffset), dayIndex))
           return `
             <div class="day-block">
               <p class="day-name">${day} · ${dayDate}</p>
@@ -1004,10 +1056,10 @@
           text: draft.text,
           done: true,
         }
-        week = saveWeek(week)
+        week = saveWeek(week, weekOffset)
         BloomsStore.saveFromHerSlot(week[idx])
         renderHome()
-        toast("Saved for him")
+        toast(weekOffset === 1 ? "Saved for next week" : "Saved for him")
         showScreen("home")
       }
 
@@ -1079,7 +1131,7 @@
         }
         try {
           await BloomsStore.pairCouple(code, { role: "her" })
-          week = saveWeek(week)
+          week = saveWeek(week, weekOffset)
           toast("Couple code saved")
           refreshPairUI()
         } catch (err) {
@@ -1097,8 +1149,12 @@
         toast("New code ready — tap Save")
       })
 
-      // Stamp dates + push every ready letter to his dated inbox
-      week = saveWeek(week)
+      document.querySelectorAll("#week-offset-toggle [data-week-offset]").forEach((btn) => {
+        btn.addEventListener("click", () => setWeekOffset(btn.getAttribute("data-week-offset")))
+      })
+
+      // Stamp next/this week dates + push every ready letter to his dated inbox
+      week = saveWeek(week, weekOffset)
       renderHome()
       refreshPairUI()
     </script>
