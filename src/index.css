@@ -1,0 +1,47 @@
+:root {
+  --ink: #2a261f;
+  --ink-soft: #5a5348;
+  --ink-muted: #8a8074;
+  --sage: #6f815c;
+  --sage-deep: #5c6b4a;
+  --blush: #e8a0a8;
+  --blush-deep: #c45c6a;
+  --font-display: 'Fraunces', Georgia, serif;
+  --font-note: 'Source Serif 4', Georgia, serif;
+  --font-ui: 'Nunito', system-ui, sans-serif;
+  --font-body: 'Source Serif 4', Georgia, serif;
+  color: var(--ink);
+  font-family: var(--font-ui);
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  min-height: 100%;
+}
+
+body {
+  margin: 0;
+  min-width: 320px;
+  background: #f0d8cc;
+}
+
+button,
+input,
+textarea {
+  font: inherit;
+}
+
+a {
+  color: inherit;
+}

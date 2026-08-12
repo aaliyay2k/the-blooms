@@ -1,0 +1,1013 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta name="theme-color" content="#1e4a37" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+    <meta name="apple-mobile-web-app-title" content="The Blooms" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <link rel="apple-touch-icon" href="./public/apple-touch-icon.png" />
+    <link rel="icon" type="image/svg+xml" href="./public/favicon.svg" />
+    <title>The Blooms — for you</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,500;0,600;1,500&family=Outfit:wght@400;500;600&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      :root {
+        --ink: #1f2a24;
+        --ink-soft: #4a5a52;
+        --leaf: #2f6a4f;
+        --leaf-deep: #1e4a37;
+        --petal: #f2b6c1;
+        --paper: #fffaf4;
+        --dawn-1: #d9efe3;
+        --dawn-2: #f7e8d8;
+        --dawn-3: #f3d5c8;
+        --night-1: #1a2e28;
+        --night-2: #243b34;
+        --night-3: #3d2e2a;
+        --shadow: rgba(30, 55, 42, 0.14);
+        --font-display: "Cormorant Garamond", Georgia, serif;
+        --font-ui: "Outfit", system-ui, sans-serif;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      html,
+      body {
+        margin: 0;
+        min-height: 100%;
+      }
+
+      body {
+        font-family: var(--font-ui);
+        color: var(--ink);
+        background:
+          radial-gradient(ellipse 90% 60% at 50% -10%, rgba(255, 220, 190, 0.55), transparent 55%),
+          radial-gradient(ellipse 50% 40% at 100% 80%, rgba(120, 170, 140, 0.22), transparent 50%),
+          linear-gradient(165deg, var(--dawn-1), var(--dawn-2) 48%, var(--dawn-3));
+        min-height: 100dvh;
+      }
+
+      body.is-night-theme {
+        color: #f3efe8;
+        background:
+          radial-gradient(ellipse 80% 50% at 50% -5%, rgba(120, 150, 130, 0.25), transparent 55%),
+          linear-gradient(165deg, var(--night-1), var(--night-2) 55%, var(--night-3));
+      }
+
+      button {
+        font: inherit;
+        cursor: pointer;
+      }
+
+      .screen {
+        display: none;
+        min-height: 100dvh;
+        padding: 1.35rem 1.25rem calc(2.5rem + env(safe-area-inset-bottom));
+        max-width: 440px;
+        margin: 0 auto;
+      }
+
+      .screen.is-active {
+        display: flex;
+        flex-direction: column;
+        animation: rise 0.65s ease both;
+      }
+
+      @keyframes rise {
+        from {
+          opacity: 0;
+          transform: translateY(16px);
+        }
+        to {
+          opacity: 1;
+          transform: translateY(0);
+        }
+      }
+
+      .brand {
+        margin: 0;
+        font-family: var(--font-display);
+        font-size: 1.3rem;
+        font-weight: 600;
+        color: var(--leaf-deep);
+      }
+
+      body.is-night-theme .brand {
+        color: #d8e8de;
+      }
+
+      .time-chip {
+        margin: 0;
+        font-size: 0.75rem;
+        font-weight: 600;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: var(--leaf);
+      }
+
+      body.is-night-theme .time-chip {
+        color: #b7cfc2;
+      }
+
+      .btn {
+        appearance: none;
+        border: 0;
+        border-radius: 999px;
+        padding: 0.95rem 1.35rem;
+        font-weight: 600;
+        font-size: 1rem;
+        transition: transform 0.18s ease, background 0.18s ease;
+      }
+
+      .btn-primary {
+        background: var(--leaf-deep);
+        color: #f4fbf6;
+        box-shadow: 0 14px 30px var(--shadow);
+      }
+
+      .btn-primary:hover {
+        transform: translateY(-1px);
+        background: #163828;
+      }
+
+      .btn-ghost {
+        background: rgba(255, 250, 244, 0.7);
+        color: var(--leaf-deep);
+        border: 1px solid rgba(30, 74, 55, 0.18);
+      }
+
+      body.is-night-theme .btn-ghost {
+        background: rgba(255, 255, 255, 0.08);
+        color: #e8f0ea;
+        border-color: rgba(255, 255, 255, 0.18);
+      }
+
+      .btn:disabled {
+        opacity: 0.45;
+        cursor: not-allowed;
+        transform: none;
+      }
+
+      /* ——— Home ——— */
+      #home {
+        gap: 1.25rem;
+      }
+
+      .home-top {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+        gap: 1rem;
+      }
+
+      .home-hello {
+        margin: 0.25rem 0 0;
+        font-family: var(--font-display);
+        font-size: clamp(1.85rem, 7vw, 2.35rem);
+        font-weight: 600;
+        letter-spacing: -0.02em;
+        line-height: 1.1;
+      }
+
+      .home-sub {
+        margin: 0.45rem 0 0;
+        color: var(--ink-soft);
+        font-size: 0.98rem;
+        line-height: 1.45;
+      }
+
+      body.is-night-theme .home-sub {
+        color: #c5d2ca;
+      }
+
+      .slot-list {
+        display: grid;
+        gap: 0.75rem;
+        margin-top: 0.35rem;
+      }
+
+      .slot {
+        text-align: left;
+        width: 100%;
+        border: 1px solid rgba(30, 74, 55, 0.14);
+        background: rgba(255, 250, 244, 0.78);
+        border-radius: 18px;
+        padding: 1rem 1.05rem;
+        display: grid;
+        gap: 0.35rem;
+      }
+
+      body.is-night-theme .slot {
+        background: rgba(255, 255, 255, 0.07);
+        border-color: rgba(255, 255, 255, 0.12);
+        color: inherit;
+      }
+
+      .slot-label {
+        font-size: 0.72rem;
+        font-weight: 700;
+        letter-spacing: 0.1em;
+        text-transform: uppercase;
+        color: var(--leaf);
+      }
+
+      body.is-night-theme .slot-label {
+        color: #b7cfc2;
+      }
+
+      .slot-title {
+        font-family: var(--font-display);
+        font-size: 1.35rem;
+        font-weight: 600;
+        margin: 0;
+      }
+
+      .slot-meta {
+        margin: 0;
+        font-size: 0.88rem;
+        color: var(--ink-soft);
+      }
+
+      body.is-night-theme .slot-meta {
+        color: #c5d2ca;
+      }
+
+      .slot-status {
+        display: inline-flex;
+        align-self: start;
+        margin-top: 0.25rem;
+        font-size: 0.75rem;
+        font-weight: 700;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+        color: var(--leaf-deep);
+        background: rgba(46, 106, 79, 0.12);
+        padding: 0.28rem 0.55rem;
+        border-radius: 999px;
+      }
+
+      .slot-status.is-waiting {
+        color: #7a6550;
+        background: rgba(160, 120, 80, 0.14);
+      }
+
+      .slot-status.is-opened {
+        color: var(--ink-soft);
+        background: rgba(0, 0, 0, 0.06);
+      }
+
+      body.is-night-theme .slot-status {
+        color: #dff0e6;
+        background: rgba(255, 255, 255, 0.12);
+      }
+
+      .slot:disabled {
+        opacity: 0.75;
+      }
+
+      .home-footer {
+        margin-top: auto;
+        display: grid;
+        gap: 0.65rem;
+        padding-top: 1rem;
+      }
+
+      /* ——— Install ——— */
+      #install {
+        justify-content: center;
+        gap: 1rem;
+        text-align: center;
+      }
+
+      #install h1 {
+        margin: 0;
+        font-family: var(--font-display);
+        font-size: clamp(2rem, 8vw, 2.5rem);
+        line-height: 1.1;
+        letter-spacing: -0.02em;
+      }
+
+      #install p {
+        margin: 0;
+        color: var(--ink-soft);
+        line-height: 1.5;
+        max-width: 32ch;
+        margin-left: auto;
+        margin-right: auto;
+      }
+
+      .install-steps {
+        text-align: left;
+        background: rgba(255, 250, 244, 0.8);
+        border-radius: 16px;
+        padding: 1rem 1.1rem;
+        display: grid;
+        gap: 0.65rem;
+        font-size: 0.95rem;
+        line-height: 1.4;
+      }
+
+      .install-steps strong {
+        color: var(--leaf-deep);
+      }
+
+      /* ——— Past ——— */
+      #past {
+        gap: 0.85rem;
+      }
+
+      #past h1 {
+        margin: 0;
+        font-family: var(--font-display);
+        font-size: 2rem;
+        letter-spacing: -0.02em;
+      }
+
+      .past-list {
+        list-style: none;
+        margin: 0;
+        padding: 0;
+        display: grid;
+        gap: 0.55rem;
+      }
+
+      .past-list button {
+        width: 100%;
+        text-align: left;
+        border: 1px solid rgba(30, 74, 55, 0.12);
+        background: rgba(255, 250, 244, 0.78);
+        border-radius: 14px;
+        padding: 0.9rem 1rem;
+        display: grid;
+        gap: 0.2rem;
+      }
+
+      .past-list strong {
+        font-size: 0.95rem;
+      }
+
+      .past-list span {
+        font-size: 0.82rem;
+        color: var(--ink-soft);
+      }
+
+      .back-link {
+        align-self: flex-start;
+        border: 0;
+        background: transparent;
+        color: var(--leaf-deep);
+        font-weight: 700;
+        font-size: 0.92rem;
+        padding: 0.2rem 0;
+      }
+
+      body.is-night-theme .back-link {
+        color: #d8e8de;
+      }
+
+      /* ——— Bouquet ——— */
+      #bouquet {
+        justify-content: space-between;
+        gap: 0.75rem;
+        max-width: none;
+        width: 100%;
+        background: linear-gradient(180deg, #dff3ea 0%, #eef6ef 38%, #f7ebe0 72%, #f4d9cb 100%);
+        padding-left: max(1.25rem, env(safe-area-inset-left));
+        padding-right: max(1.25rem, env(safe-area-inset-right));
+      }
+
+      body.is-night-theme #bouquet {
+        background: linear-gradient(180deg, #1f3530 0%, #2a4038 40%, #3d322c 100%);
+      }
+
+      #bouquet > * {
+        width: min(440px, 100%);
+        margin-left: auto;
+        margin-right: auto;
+      }
+
+      .top-meta {
+        display: flex;
+        justify-content: space-between;
+        align-items: baseline;
+        gap: 1rem;
+      }
+
+      .from-line {
+        margin: 0;
+        font-size: 0.85rem;
+        font-weight: 500;
+        color: var(--ink-soft);
+      }
+
+      body.is-night-theme .from-line {
+        color: #c5d2ca;
+      }
+
+      .bouquet-stage {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        text-align: center;
+        gap: 0.9rem;
+      }
+
+      .bouquet-art {
+        width: min(100%, 380px);
+        margin: 0 auto;
+        opacity: 0;
+        transform: scale(0.92) translateY(16px);
+      }
+
+      #bouquet.is-active .bouquet-art {
+        animation: bouquetIn 0.9s cubic-bezier(0.2, 0.85, 0.2, 1) forwards;
+      }
+
+      .bouquet-art img.fallback {
+        width: 100%;
+        height: auto;
+        display: block;
+        filter: drop-shadow(0 18px 28px rgba(55, 70, 50, 0.16));
+      }
+
+      .preview-frame {
+        position: relative;
+        width: min(100%, 340px);
+        aspect-ratio: 1 / 1.05;
+        margin: 0 auto;
+      }
+
+      .kraft {
+        position: absolute;
+        left: 50%;
+        bottom: 6%;
+        width: 42%;
+        height: 26%;
+        transform: translateX(-50%);
+        background: linear-gradient(180deg, #c4a484, #a88468);
+        clip-path: polygon(16% 0, 84% 0, 100% 100%, 0 100%);
+        z-index: 1;
+        pointer-events: none;
+      }
+
+      .bloom {
+        position: absolute;
+        filter: drop-shadow(0 8px 12px rgba(40, 60, 45, 0.15));
+      }
+
+      .bloom img {
+        width: 100%;
+        display: block;
+      }
+
+      .empty-garden {
+        margin: 1rem 0 0;
+        padding: 1.1rem;
+        border-radius: 14px;
+        background: rgba(255, 250, 244, 0.75);
+        color: var(--ink-soft);
+        line-height: 1.45;
+        font-size: 0.95rem;
+      }
+
+      body.is-night-theme .empty-garden {
+        background: rgba(255, 255, 255, 0.08);
+        color: #c5d2ca;
+      }
+
+      @keyframes bouquetIn {
+        to {
+          opacity: 1;
+          transform: scale(1) translateY(0);
+        }
+      }
+
+      .bouquet-title {
+        margin: 0;
+        font-family: var(--font-display);
+        font-size: clamp(1.8rem, 7vw, 2.3rem);
+        line-height: 1.1;
+        letter-spacing: -0.02em;
+      }
+
+      .flower-names {
+        margin: 0;
+        font-size: 0.8rem;
+        font-weight: 500;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+        color: var(--leaf);
+      }
+
+      body.is-night-theme .flower-names {
+        color: #b7cfc2;
+      }
+
+      /* ——— Message ——— */
+      #message {
+        justify-content: center;
+        gap: 1rem;
+      }
+
+      .message-shell {
+        background: var(--paper);
+        border: 1px solid rgba(30, 74, 55, 0.1);
+        box-shadow: 0 20px 50px var(--shadow);
+        border-radius: 18px;
+        padding: 1.6rem 1.35rem 1.4rem;
+        position: relative;
+        overflow: hidden;
+        color: var(--ink);
+      }
+
+      .message-shell::before {
+        content: "";
+        position: absolute;
+        inset: 0 0 auto 0;
+        height: 4px;
+        background: linear-gradient(90deg, var(--leaf), var(--petal));
+      }
+
+      .message-shell[data-kind="note"] {
+        border-radius: 14px;
+        padding: 1.25rem 1.15rem;
+        transform: rotate(-1.1deg);
+        background: #fff7e8;
+      }
+
+      .message-kind {
+        margin: 0 0 0.75rem;
+        font-size: 0.72rem;
+        font-weight: 600;
+        letter-spacing: 0.1em;
+        text-transform: uppercase;
+        color: var(--leaf);
+      }
+
+      .message-body {
+        margin: 0;
+        font-family: var(--font-display);
+        font-size: 1.35rem;
+        line-height: 1.55;
+        white-space: pre-wrap;
+      }
+
+      .message-shell[data-kind="note"] .message-body {
+        font-size: 1.2rem;
+      }
+
+      .message-sign {
+        margin: 1.35rem 0 0;
+        font-family: var(--font-display);
+        font-style: italic;
+        font-size: 1.15rem;
+        text-align: right;
+        color: var(--leaf-deep);
+      }
+
+      .actions {
+        display: grid;
+        gap: 0.65rem;
+        margin-top: 0.35rem;
+      }
+
+      @media (prefers-reduced-motion: reduce) {
+        .screen.is-active,
+        .bouquet-art {
+          animation: none !important;
+          opacity: 1 !important;
+          transform: none !important;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <!-- HIS POV — pair, home, morning, night, past, install -->
+
+    <section id="pair" class="screen is-active" aria-label="Enter couple code">
+      <p class="brand">The Blooms</p>
+      <p class="time-chip">For him</p>
+      <h1 class="home-hello">Enter your couple code</h1>
+      <p class="home-sub">
+        She created a code on her side. Enter it once — then your mornings and nights sync here.
+      </p>
+      <input
+        id="his-couple-code"
+        type="text"
+        maxlength="20"
+        placeholder="e.g. ROSE-4242"
+        style="width:100%;border:1px solid rgba(30,74,55,.2);border-radius:14px;padding:.9rem 1rem;font:inherit;text-transform:uppercase;letter-spacing:.04em;margin:1rem 0;background:rgba(255,250,244,.9)"
+      />
+      <button type="button" class="btn btn-primary" id="his-pair-btn">Open our garden</button>
+      <p class="home-sub" id="his-pair-status" style="margin-top:1rem"></p>
+    </section>
+
+    <section id="home" class="screen" aria-label="Today">
+      <div class="home-top">
+        <div>
+          <p class="brand">The Blooms</p>
+          <h1 class="home-hello" id="greeting">Good morning</h1>
+          <p class="home-sub">Two soft deliveries each day — one before 10:00, one at 11:00 at night.</p>
+          <p class="time-chip" id="home-couple-code" style="margin-top:0.45rem"></p>
+        </div>
+      </div>
+
+      <div class="slot-list">
+        <button type="button" class="slot" id="slot-morning">
+          <span class="slot-label">Morning · before 10:00</span>
+          <p class="slot-title">Today’s morning</p>
+          <p class="slot-meta" id="morning-meta">Bouquet + letter from her</p>
+          <span class="slot-status" id="morning-status">Open now</span>
+        </button>
+
+        <button type="button" class="slot" id="slot-night">
+          <span class="slot-label">Night · 11:00 PM</span>
+          <p class="slot-title">Tonight</p>
+          <p class="slot-meta" id="night-meta">Bouquet + note from her</p>
+          <span class="slot-status" id="night-status">Opens at 11:00 PM</span>
+        </button>
+      </div>
+
+      <div class="home-footer">
+        <button type="button" class="btn btn-ghost" data-go="past">Past mornings & nights</button>
+        <button type="button" class="btn btn-ghost" data-go="install">Add to Home Screen</button>
+        <button type="button" class="btn btn-ghost" id="change-couple-code">Change couple code</button>
+      </div>
+    </section>
+
+    <section id="install" class="screen" aria-label="Add to Home Screen">
+      <button type="button" class="back-link" data-go="home">← Back</button>
+      <p class="brand">The Blooms</p>
+      <h1>Keep us on your Home Screen</h1>
+      <p>Then every morning and night, this opens like an app — on iPhone or Android.</p>
+
+      <div class="install-steps" id="install-steps">
+        <!-- filled by script for iPhone vs Android -->
+      </div>
+
+      <button type="button" class="btn btn-primary" data-go="home">Done</button>
+    </section>
+
+    <section id="night-wait" class="screen" aria-label="Night waiting">
+      <button type="button" class="back-link" data-go="home">← Home</button>
+      <div class="bouquet-stage" style="flex: 1; justify-content: center; text-align: center; gap: 0.85rem">
+        <p class="brand">The Blooms</p>
+        <p class="time-chip">Night · 11:00 PM</p>
+        <h1 class="home-hello" style="max-width: 12ch; margin-left: auto; margin-right: auto">
+          Tonight opens at night only.
+        </h1>
+        <p class="home-sub" style="margin-left: auto; margin-right: auto">
+          Come back at 11:00 PM — your bouquet and note will be waiting.
+        </p>
+        <button type="button" class="btn btn-primary" data-go="home">Back to today</button>
+      </div>
+    </section>
+
+    <section id="past" class="screen" aria-label="Past deliveries">
+      <button type="button" class="back-link" data-go="home">← Home</button>
+      <h1>Your garden so far</h1>
+      <ul class="past-list" id="past-list"></ul>
+    </section>
+
+    <section id="bouquet" class="screen" aria-label="Digital bouquet">
+      <div class="top-meta">
+        <button type="button" class="back-link" data-go="home">← Home</button>
+        <p class="time-chip" id="bouquet-when">Morning</p>
+      </div>
+
+      <div class="bouquet-stage">
+        <div class="bouquet-art">
+          <div class="preview-frame" id="bouquet-canvas"></div>
+        </div>
+        <p class="time-chip" id="bouquet-date" style="margin: 0"></p>
+        <h2 class="bouquet-title" id="bouquet-title">A bouquet for your morning.</h2>
+        <p class="flower-names">Hand-picked · just for you</p>
+        <button class="btn btn-primary" type="button" id="read-words">Read what she wrote</button>
+      </div>
+    </section>
+
+    <section id="message" class="screen" aria-label="Her message">
+      <div class="top-meta">
+        <button type="button" class="back-link" id="message-back">← Bouquet</button>
+        <p class="time-chip" id="kind-label">Love letter</p>
+      </div>
+
+      <article class="message-shell" id="message-shell" data-kind="letter">
+        <p class="message-kind" id="message-kind">Love letter</p>
+        <p class="message-body" id="message-body"></p>
+        <p class="message-sign">— with love</p>
+      </article>
+
+      <div class="actions">
+        <button class="btn btn-primary" type="button" data-go="home">Keep this one</button>
+      </div>
+    </section>
+
+    <script src="./public/js/blooms-store.js"></script>
+    <script>
+      const FLOWER_BASE = "https://assets.pauwee.com/color/flowers"
+      let activeDelivery = null
+
+      function greeting() {
+        const h = new Date().getHours()
+        if (h < 12) return "Good morning"
+        if (h < 18) return "Good afternoon"
+        return "Good evening"
+      }
+
+      function showScreen(id) {
+        document.querySelectorAll(".screen").forEach((el) => el.classList.remove("is-active"))
+        document.getElementById(id).classList.add("is-active")
+        window.scrollTo({ top: 0, behavior: "smooth" })
+
+        const nightMode =
+          (id === "bouquet" || id === "message") && activeDelivery?.part === "night"
+        document.body.classList.toggle(
+          "is-night-theme",
+          nightMode || (id === "home" && new Date().getHours() >= 23),
+        )
+      }
+
+      function renderBouquet(flowers) {
+        const box = document.getElementById("bouquet-canvas")
+        box.innerHTML = `<div class="kraft"></div>`
+        if (!flowers || !flowers.length) {
+          box.innerHTML += `<img class="fallback" src="./public/bouquets/custom-1.png" alt="Bouquet" style="width:100%;position:relative;z-index:2" />`
+          return
+        }
+        flowers.forEach((flower) => {
+          const name = typeof flower === "string" ? flower : flower.name
+          const el = document.createElement("div")
+          el.className = "bloom"
+          el.style.left = `${flower.x ?? 30}%`
+          el.style.top = `${flower.y ?? 20}%`
+          el.style.width = `${flower.size ?? 34}%`
+          el.style.zIndex = String(flower.z ?? 2)
+          el.innerHTML = `<img src="${FLOWER_BASE}/${name}.webp" alt="" />`
+          box.appendChild(el)
+        })
+      }
+
+      function refreshHome() {
+        document.getElementById("greeting").textContent = greeting()
+        const opened = new Set(BloomsStore.getOpened())
+        const today = BloomsStore.getTodayKey()
+
+        ;["morning", "night"].forEach((part) => {
+          const d = BloomsStore.getTodayDelivery(part)
+          const statusEl = document.getElementById(`${part}-status`)
+          const metaEl = document.getElementById(`${part}-meta`)
+          const btn = document.getElementById(`slot-${part}`)
+
+          if (!d) {
+            statusEl.textContent = "Not here yet"
+            statusEl.className = "slot-status is-waiting"
+            metaEl.textContent =
+              part === "morning"
+                ? "Waiting for today’s bouquet & words"
+                : "Waiting for tonight’s bouquet & words"
+            btn.dataset.empty = "1"
+            return
+          }
+
+          btn.dataset.empty = "0"
+          metaEl.textContent = `${d.dateLabel} · ${d.kindLabel.toLowerCase()}`
+
+          const unlocked = BloomsStore.isDeliveryUnlocked(d)
+          const done = opened.has(d.id)
+
+          if (done) {
+            statusEl.textContent = "Opened"
+            statusEl.className = "slot-status is-opened"
+          } else if (unlocked) {
+            statusEl.textContent = "Open now"
+            statusEl.className = "slot-status"
+          } else {
+            statusEl.textContent = "Opens at 11:00 PM only"
+            statusEl.className = "slot-status is-waiting"
+          }
+        })
+      }
+
+      function openDelivery(delivery, { ignoreSchedule = false } = {}) {
+        if (!delivery) return
+
+        if (!ignoreSchedule && delivery.part === "night" && !BloomsStore.isDeliveryUnlocked(delivery)) {
+          showScreen("night-wait")
+          return
+        }
+
+        activeDelivery = delivery
+        document.getElementById("bouquet-when").textContent = delivery.whenLabel
+        document.getElementById("bouquet-date").textContent = delivery.dateLabel
+        document.getElementById("bouquet-title").textContent = delivery.title
+        renderBouquet(delivery.flowers)
+        showScreen("bouquet")
+      }
+
+      function openToday(part) {
+        const d = BloomsStore.getTodayDelivery(part)
+        if (!d) {
+          const label = part === "morning" ? "This morning" : "Tonight"
+          document.getElementById("past-list").innerHTML = `
+            <li class="empty-garden">${label} isn’t saved yet. When she prepares it, it will show up here with the date.</li>`
+          showScreen("past")
+          return
+        }
+        openDelivery(d)
+      }
+
+      function openMessage() {
+        if (!activeDelivery) return
+        const shell = document.getElementById("message-shell")
+        shell.dataset.kind = activeDelivery.kind
+        document.getElementById("message-kind").textContent = activeDelivery.kindLabel
+        document.getElementById("kind-label").textContent = activeDelivery.kindLabel
+        document.getElementById("message-body").textContent = activeDelivery.text
+        BloomsStore.markOpened(activeDelivery.id)
+        refreshHome()
+        showScreen("message")
+      }
+
+      function renderPast() {
+        const list = document.getElementById("past-list")
+        const inbox = BloomsStore.getInbox()
+        const opened = new Set(BloomsStore.getOpened())
+
+        if (!inbox.length) {
+          list.innerHTML = `<li class="empty-garden">Nothing saved yet. When she sends a bouquet and note, it will appear here with the date.</li>`
+          return
+        }
+
+        list.innerHTML = inbox
+          .map((d) => {
+            const badge = opened.has(d.id) ? "Opened" : "New"
+            return `
+            <li>
+              <button type="button" data-id="${d.id}">
+                <strong>${d.dateLabel} · ${d.whenLabel}</strong>
+                <span>${d.kindLabel} · ${d.flowers.length} flowers · ${badge}</span>
+              </button>
+            </li>`
+          })
+          .join("")
+
+        list.querySelectorAll("[data-id]").forEach((btn) => {
+          btn.addEventListener("click", () => {
+            const item = inbox.find((d) => d.id === btn.getAttribute("data-id"))
+            openDelivery(item, { ignoreSchedule: true })
+          })
+        })
+      }
+
+      function renderInstallSteps() {
+        const ua = navigator.userAgent || ""
+        const isIOS = /iPhone|iPad|iPod/i.test(ua)
+        const isAndroid = /Android/i.test(ua)
+        const box = document.getElementById("install-steps")
+
+        if (isIOS) {
+          box.innerHTML = `
+            <div><strong>iPhone (Safari)</strong></div>
+            <div>1. Tap the Share button</div>
+            <div>2. Tap <strong>Add to Home Screen</strong></div>
+            <div>3. Tap Add — open The Blooms from your Home Screen anytime</div>`
+        } else if (isAndroid) {
+          box.innerHTML = `
+            <div><strong>Android (Chrome)</strong></div>
+            <div>1. Tap the menu (⋮)</div>
+            <div>2. Tap <strong>Install app</strong> or <strong>Add to Home screen</strong></div>
+            <div>3. Open The Blooms from your Home Screen anytime</div>`
+        } else {
+          box.innerHTML = `
+            <div><strong>On your phone</strong></div>
+            <div><strong>iPhone:</strong> Safari → Share → Add to Home Screen</div>
+            <div><strong>Android:</strong> Chrome → menu → Add to Home screen</div>`
+        }
+      }
+
+      document.querySelectorAll("[data-go]").forEach((btn) => {
+        btn.addEventListener("click", () => {
+          const id = btn.getAttribute("data-go")
+          if (id === "past") renderPast()
+          if (id === "install") renderInstallSteps()
+          if (id === "home") refreshHome()
+          showScreen(id)
+        })
+      })
+
+      document.getElementById("slot-morning").addEventListener("click", () => openToday("morning"))
+      document.getElementById("slot-night").addEventListener("click", () => openToday("night"))
+      document.getElementById("read-words").addEventListener("click", openMessage)
+      document.getElementById("message-back").addEventListener("click", () => showScreen("bouquet"))
+
+      async function showPairScreen(message) {
+        const last = BloomsStore.getCoupleCode()
+        document.getElementById("his-couple-code").value = last || ""
+        document.getElementById("his-pair-status").textContent = message || ""
+        document.querySelectorAll(".screen").forEach((el) => el.classList.remove("is-active"))
+        document.getElementById("pair").classList.add("is-active")
+        BloomsStore.health()
+          .then(() => {
+            if (!document.getElementById("his-pair-status").textContent) {
+              document.getElementById("his-pair-status").textContent =
+                "Enter your couple code to open today’s blooms."
+            }
+          })
+          .catch(() => {
+            document.getElementById("his-pair-status").textContent =
+              "Backend offline — start it to sync from her phone."
+          })
+      }
+
+      async function boot() {
+        // Always ask for the couple code when the app/website opens
+        await showPairScreen("Enter your couple code to open The Blooms.")
+      }
+
+      document.getElementById("change-couple-code").addEventListener("click", () => {
+        showPairScreen("Enter the couple code again.")
+      })
+
+      document.getElementById("home-couple-code").addEventListener("click", () => {
+        showPairScreen("Enter the couple code again.")
+      })
+
+      document.getElementById("his-pair-btn").addEventListener("click", async () => {
+        const code = document.getElementById("his-couple-code").value.trim()
+        const status = document.getElementById("his-pair-status")
+        if (code.length < 4) {
+          status.textContent = "Ask her for the couple code."
+          return
+        }
+        try {
+          await BloomsStore.pairCouple(code)
+          status.textContent = "Connected."
+          document.getElementById("pair").classList.remove("is-active")
+          document.getElementById("home").classList.add("is-active")
+          document.getElementById("home-couple-code").textContent = `Paired · ${code.toUpperCase()}`
+          await BloomsStore.pullInbox()
+          refreshHome()
+          renderInstallSteps()
+          await enablePushNotifications(code.toUpperCase())
+        } catch (err) {
+          status.textContent = "Could not reach the server. Check the code and try again."
+        }
+      })
+
+      function urlBase64ToUint8Array(base64String) {
+        const padding = "=".repeat((4 - (base64String.length % 4)) % 4)
+        const base64 = (base64String + padding).replace(/-/g, "+").replace(/_/g, "/")
+        const raw = atob(base64)
+        const output = new Uint8Array(raw.length)
+        for (let i = 0; i < raw.length; i += 1) output[i] = raw.charCodeAt(i)
+        return output
+      }
+
+      async function enablePushNotifications(code) {
+        if (!("serviceWorker" in navigator) || !("PushManager" in window)) return
+        try {
+          const reg = await navigator.serviceWorker.register("/sw.js")
+          const permission = await Notification.requestPermission()
+          if (permission !== "granted") return
+
+          const keyRes = await fetch(`${BloomsStore.getApiBase()}/api/push/public-key`)
+          if (!keyRes.ok) return
+          const { publicKey } = await keyRes.json()
+
+          let subscription = await reg.pushManager.getSubscription()
+          if (!subscription) {
+            subscription = await reg.pushManager.subscribe({
+              userVisibleOnly: true,
+              applicationServerKey: urlBase64ToUint8Array(publicKey),
+            })
+          }
+
+          await fetch(
+            `${BloomsStore.getApiBase()}/api/couple/${encodeURIComponent(code)}/push-subscribe`,
+            {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ subscription }),
+            },
+          )
+        } catch (err) {
+          console.warn("Could not enable notifications:", err)
+        }
+      }
+
+      boot()
+    </script>
+  </body>
+</html>

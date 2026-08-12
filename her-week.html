@@ -1,0 +1,1095 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta name="theme-color" content="#1e4a37" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+    <meta name="apple-mobile-web-app-title" content="The Blooms" />
+    <link rel="apple-touch-icon" href="./public/apple-touch-icon.png" />
+    <link rel="icon" type="image/svg+xml" href="./public/favicon.svg" />
+    <title>The Blooms — prepare the week</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,500;0,600;1,500&family=Outfit:wght@400;500;600&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      :root {
+        --ink: #1f2a24;
+        --ink-soft: #4a5a52;
+        --leaf: #2f6a4f;
+        --leaf-deep: #1e4a37;
+        --petal: #f2b6c1;
+        --paper: #fffaf4;
+        --dawn-1: #d9efe3;
+        --dawn-2: #f7e8d8;
+        --dawn-3: #f3d5c8;
+        --shadow: rgba(30, 55, 42, 0.14);
+        --kraft: #c4a484;
+        --kraft-deep: #a88468;
+        --font-display: "Cormorant Garamond", Georgia, serif;
+        --font-ui: "Outfit", system-ui, sans-serif;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      html,
+      body {
+        margin: 0;
+        min-height: 100%;
+      }
+
+      body {
+        font-family: var(--font-ui);
+        color: var(--ink);
+        background:
+          radial-gradient(ellipse 90% 60% at 50% -10%, rgba(255, 220, 190, 0.55), transparent 55%),
+          radial-gradient(ellipse 50% 40% at 100% 80%, rgba(120, 170, 140, 0.22), transparent 50%),
+          linear-gradient(165deg, var(--dawn-1), var(--dawn-2) 48%, var(--dawn-3));
+        min-height: 100dvh;
+      }
+
+      button,
+      textarea {
+        font: inherit;
+      }
+
+      button {
+        cursor: pointer;
+      }
+
+      .screen {
+        display: none;
+        min-height: 100dvh;
+        padding: 1.35rem 1.25rem calc(2.5rem + env(safe-area-inset-bottom));
+        max-width: 440px;
+        margin: 0 auto;
+      }
+
+      .screen.is-active {
+        display: flex;
+        flex-direction: column;
+        animation: rise 0.6s ease both;
+      }
+
+      @keyframes rise {
+        from {
+          opacity: 0;
+          transform: translateY(14px);
+        }
+        to {
+          opacity: 1;
+          transform: translateY(0);
+        }
+      }
+
+      .brand {
+        margin: 0;
+        font-family: var(--font-display);
+        font-size: 1.3rem;
+        font-weight: 600;
+        color: var(--leaf-deep);
+      }
+
+      .eyebrow {
+        margin: 0;
+        font-size: 0.75rem;
+        font-weight: 700;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: var(--leaf);
+      }
+
+      h1 {
+        margin: 0.3rem 0 0;
+        font-family: var(--font-display);
+        font-size: clamp(1.85rem, 7vw, 2.3rem);
+        font-weight: 600;
+        letter-spacing: -0.02em;
+        line-height: 1.1;
+      }
+
+      .lede {
+        margin: 0.5rem 0 0;
+        color: var(--ink-soft);
+        line-height: 1.45;
+        font-size: 0.98rem;
+      }
+
+      .btn {
+        appearance: none;
+        border: 0;
+        border-radius: 999px;
+        padding: 0.95rem 1.35rem;
+        font-weight: 600;
+        font-size: 1rem;
+      }
+
+      .btn-primary {
+        background: var(--leaf-deep);
+        color: #f4fbf6;
+        box-shadow: 0 14px 28px var(--shadow);
+      }
+
+      .btn-primary:disabled {
+        opacity: 0.4;
+        cursor: not-allowed;
+      }
+
+      .btn-ghost {
+        background: rgba(255, 250, 244, 0.7);
+        color: var(--leaf-deep);
+        border: 1px solid rgba(30, 74, 55, 0.18);
+      }
+
+      .back-link {
+        align-self: flex-start;
+        border: 0;
+        background: transparent;
+        color: var(--leaf-deep);
+        font-weight: 700;
+        font-size: 0.92rem;
+        padding: 0.2rem 0;
+        margin-bottom: 0.5rem;
+      }
+
+      .progress {
+        margin: 1rem 0 0.35rem;
+        font-size: 0.88rem;
+        font-weight: 600;
+        color: var(--leaf-deep);
+      }
+
+      .progress-bar {
+        height: 8px;
+        border-radius: 999px;
+        background: rgba(30, 74, 55, 0.12);
+        overflow: hidden;
+        margin-bottom: 1rem;
+      }
+
+      .progress-bar > span {
+        display: block;
+        height: 100%;
+        width: 0%;
+        background: var(--leaf-deep);
+        border-radius: inherit;
+        transition: width 0.3s ease;
+      }
+
+      .day-block {
+        margin-bottom: 0.85rem;
+      }
+
+      .day-name {
+        margin: 0 0 0.4rem;
+        font-size: 0.78rem;
+        font-weight: 700;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        color: var(--ink-soft);
+      }
+
+      .slot-row {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 0.5rem;
+      }
+
+      .slot-card {
+        text-align: left;
+        border: 1px solid rgba(30, 74, 55, 0.14);
+        background: rgba(255, 250, 244, 0.8);
+        border-radius: 14px;
+        padding: 0.8rem 0.75rem;
+        display: grid;
+        gap: 0.2rem;
+        min-height: 88px;
+      }
+
+      .slot-card.is-done {
+        border-color: rgba(30, 74, 55, 0.35);
+        background: rgba(255, 255, 255, 0.92);
+      }
+
+      .slot-card .when {
+        font-size: 0.7rem;
+        font-weight: 700;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        color: var(--leaf);
+      }
+
+      .slot-card .state {
+        font-family: var(--font-display);
+        font-size: 1.05rem;
+        font-weight: 600;
+      }
+
+      .slot-card .hint {
+        font-size: 0.75rem;
+        color: var(--ink-soft);
+      }
+
+      /* Bouquet builder */
+      #build-bouquet {
+        max-width: none;
+        width: 100%;
+        background: linear-gradient(180deg, #dff3ea 0%, #eef6ef 40%, #f7ebe0 100%);
+        padding-left: max(1.25rem, env(safe-area-inset-left));
+        padding-right: max(1.25rem, env(safe-area-inset-right));
+      }
+
+      #build-bouquet > * {
+        width: min(440px, 100%);
+        margin-left: auto;
+        margin-right: auto;
+      }
+
+      .preview-frame {
+        position: relative;
+        width: min(100%, 320px);
+        aspect-ratio: 1 / 1.05;
+        margin: 0.5rem auto 0.75rem;
+        touch-action: none;
+        user-select: none;
+      }
+
+      .kraft {
+        position: absolute;
+        left: 50%;
+        bottom: 6%;
+        width: 42%;
+        height: 26%;
+        transform: translateX(-50%);
+        background: linear-gradient(180deg, var(--kraft), var(--kraft-deep));
+        clip-path: polygon(16% 0, 84% 0, 100% 100%, 0 100%);
+        z-index: 1;
+        pointer-events: none;
+      }
+
+      .bloom {
+        position: absolute;
+        width: 34%;
+        z-index: 2;
+        filter: drop-shadow(0 8px 12px rgba(40, 60, 45, 0.15));
+        cursor: grab;
+        touch-action: none;
+      }
+
+      .bloom.is-dragging {
+        cursor: grabbing;
+        filter: drop-shadow(0 14px 20px rgba(40, 60, 45, 0.28));
+        z-index: 50 !important;
+      }
+
+      .bloom.is-selected {
+        outline: 2px solid var(--leaf-deep);
+        outline-offset: 2px;
+        border-radius: 50%;
+      }
+
+      .bloom img {
+        width: 100%;
+        display: block;
+        pointer-events: none;
+      }
+
+      .arrange-hint {
+        margin: 0 0 0.75rem;
+        text-align: center;
+        font-size: 0.82rem;
+        color: var(--ink-soft);
+      }
+
+      .bloom-tools {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 0.45rem;
+        margin: 0 0 0.85rem;
+      }
+
+      .pick-label {
+        margin: 0 0 0.55rem;
+        font-size: 0.88rem;
+        font-weight: 600;
+      }
+
+      .flower-grid {
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        gap: 0.45rem;
+      }
+
+      .flower-pick {
+        border: 1px solid rgba(30, 74, 55, 0.14);
+        background: rgba(255, 252, 248, 0.85);
+        border-radius: 12px;
+        padding: 0.35rem;
+        display: grid;
+        gap: 0.2rem;
+        justify-items: center;
+      }
+
+      .flower-pick:active {
+        transform: scale(0.96);
+      }
+
+      .flower-pick img {
+        width: 100%;
+        aspect-ratio: 1;
+        object-fit: contain;
+      }
+
+      .flower-pick span {
+        font-size: 0.65rem;
+        font-weight: 600;
+        text-transform: capitalize;
+        color: var(--ink-soft);
+      }
+
+      .flower-pick .qty {
+        font-size: 0.65rem;
+        font-weight: 700;
+        color: var(--leaf-deep);
+        min-height: 0.9rem;
+      }
+
+      .count-line {
+        margin: 0.65rem 0 0.85rem;
+        text-align: center;
+        font-size: 0.85rem;
+        color: var(--ink-soft);
+      }
+
+      .pair-box {
+        margin: 1rem 0 0.5rem;
+        padding: 0.9rem;
+        border-radius: 16px;
+        background: rgba(255, 250, 244, 0.75);
+        border: 1px solid rgba(30, 74, 55, 0.12);
+      }
+
+      .pair-row {
+        display: grid;
+        grid-template-columns: 1fr auto;
+        gap: 0.45rem;
+      }
+
+      .pair-row input {
+        width: 100%;
+        border: 1px solid rgba(30, 74, 55, 0.2);
+        border-radius: 12px;
+        padding: 0.75rem 0.85rem;
+        font-family: var(--font-ui);
+        font-size: 1rem;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+        outline: none;
+        background: #fffaf4;
+      }
+
+      .pair-row .btn {
+        padding: 0.75rem 1rem;
+      }
+
+      .pair-box .count-line {
+        margin: 0.55rem 0 0;
+        text-align: left;
+      }
+
+      /* Message writer */
+      .kind-toggle {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 0.4rem;
+        padding: 0.3rem;
+        background: rgba(255, 255, 255, 0.4);
+        border-radius: 999px;
+        margin: 1rem 0;
+      }
+
+      .kind-toggle button {
+        border: 0;
+        background: transparent;
+        border-radius: 999px;
+        padding: 0.65rem;
+        font-weight: 600;
+        color: var(--ink-soft);
+      }
+
+      .kind-toggle button.is-on {
+        background: rgba(255, 255, 255, 0.9);
+        color: var(--ink);
+        box-shadow: 0 4px 14px rgba(30, 55, 42, 0.08);
+      }
+
+      textarea {
+        width: 100%;
+        min-height: 180px;
+        border: 1px solid rgba(30, 74, 55, 0.2);
+        background: rgba(255, 250, 244, 0.9);
+        border-radius: 16px;
+        padding: 1rem;
+        font-family: var(--font-display);
+        font-size: 1.2rem;
+        line-height: 1.55;
+        color: var(--ink);
+        resize: vertical;
+        outline: none;
+      }
+
+      textarea:focus {
+        border-color: var(--leaf);
+        box-shadow: 0 0 0 3px rgba(47, 106, 79, 0.15);
+      }
+
+      .char-count {
+        margin: 0.4rem 0 1rem;
+        text-align: right;
+        font-size: 0.75rem;
+        color: var(--ink-soft);
+      }
+
+      .actions {
+        display: grid;
+        gap: 0.55rem;
+        margin-top: auto;
+      }
+
+      /* Preview */
+      #preview-message .message-shell {
+        background: var(--paper);
+        border-radius: 18px;
+        padding: 1.4rem 1.2rem;
+        box-shadow: 0 16px 40px var(--shadow);
+        border: 1px solid rgba(30, 74, 55, 0.1);
+      }
+
+      #preview-message .message-shell[data-kind="note"] {
+        background: #fff7e8;
+        transform: rotate(-1deg);
+      }
+
+      .message-kind {
+        margin: 0 0 0.6rem;
+        font-size: 0.72rem;
+        font-weight: 700;
+        letter-spacing: 0.1em;
+        text-transform: uppercase;
+        color: var(--leaf);
+      }
+
+      .message-body {
+        margin: 0;
+        font-family: var(--font-display);
+        font-size: 1.25rem;
+        line-height: 1.55;
+        white-space: pre-wrap;
+      }
+
+      .toast {
+        position: fixed;
+        left: 50%;
+        bottom: 1.5rem;
+        transform: translateX(-50%) translateY(20px);
+        background: var(--leaf-deep);
+        color: #f4fbf6;
+        padding: 0.75rem 1.1rem;
+        border-radius: 999px;
+        font-size: 0.9rem;
+        font-weight: 600;
+        opacity: 0;
+        pointer-events: none;
+        transition: 0.25s ease;
+        z-index: 20;
+      }
+
+      .toast.is-on {
+        opacity: 1;
+        transform: translateX(-50%) translateY(0);
+      }
+
+      @media (prefers-reduced-motion: reduce) {
+        .screen.is-active {
+          animation: none;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <!-- HER POV: prepare 14 deliveries for the week -->
+
+    <section id="home" class="screen is-active">
+      <p class="brand">The Blooms</p>
+      <p class="eyebrow">Your side</p>
+      <h1>Prepare this week</h1>
+      <p class="lede">
+        Make 14 soft deliveries — a bouquet + note or letter for each morning (before 10:00) and
+        night (11:00 PM).
+      </p>
+
+      <div class="pair-box" id="pair-box">
+        <p class="pick-label">Couple code (share once with him — not every day)</p>
+        <div class="pair-row">
+          <input id="couple-code-input" type="text" maxlength="20" placeholder="e.g. ROSE-4242" />
+          <button type="button" class="btn btn-primary" id="save-couple-code">Save</button>
+        </div>
+        <div class="pair-row" style="margin-top: 0.45rem">
+          <button type="button" class="btn btn-ghost" id="make-couple-code" style="grid-column: 1 / -1">
+            Make a new code
+          </button>
+        </div>
+        <p class="count-line" id="pair-status">Connect once so his phone can receive your saves.</p>
+      </div>
+
+      <p class="progress" id="progress-text">0 of 14 ready</p>
+      <div class="progress-bar" aria-hidden="true"><span id="progress-fill"></span></div>
+
+      <div id="week-list"></div>
+
+      <div class="actions" style="margin-top: 1rem">
+        <button type="button" class="btn btn-ghost" id="fill-next">Continue next empty</button>
+        <a class="btn btn-ghost" href="./his-morning.html" style="text-align: center; text-decoration: none"
+          >See his side</a
+        >
+      </div>
+    </section>
+
+    <section id="build-bouquet" class="screen">
+      <button type="button" class="back-link" data-go="home">← Week</button>
+      <p class="eyebrow" id="bouquet-slot-label">Monday · Morning</p>
+      <h1>Customize the bouquet</h1>
+      <p class="lede">Tap a flower to add it (you can add the same one again). Then drag to arrange.</p>
+
+      <div class="preview-frame" id="bouquet-preview">
+        <div class="kraft"></div>
+      </div>
+      <p class="arrange-hint">Drag flowers to move · tap one to select</p>
+      <div class="bloom-tools">
+        <button type="button" class="btn btn-ghost" id="bring-front">Bring forward</button>
+        <button type="button" class="btn btn-ghost" id="remove-selected">Remove selected</button>
+      </div>
+
+      <p class="pick-label">Tap to add (as many times as you want)</p>
+      <div class="flower-grid" id="flower-grid"></div>
+      <p class="count-line" id="flower-count">0 flowers · need at least 4</p>
+
+      <div class="actions">
+        <button type="button" class="btn btn-primary" id="to-message" disabled>Write the words</button>
+      </div>
+    </section>
+
+    <section id="write-message" class="screen">
+      <button type="button" class="back-link" id="back-to-bouquet">← Bouquet</button>
+      <p class="eyebrow" id="message-slot-label">Monday · Morning</p>
+      <h1>Write for him</h1>
+      <p class="lede">A full letter when you have more to say — or a small note for a soft check-in.</p>
+
+      <div class="kind-toggle" role="tablist">
+        <button type="button" class="is-on" data-kind="letter">Love letter</button>
+        <button type="button" data-kind="note">Small note</button>
+      </div>
+
+      <textarea
+        id="message-text"
+        maxlength="800"
+        placeholder="Good morning…"
+      ></textarea>
+      <p class="char-count"><span id="char-count">0</span>/800</p>
+
+      <div class="actions">
+        <button type="button" class="btn btn-primary" id="to-preview" disabled>Preview</button>
+      </div>
+    </section>
+
+    <section id="preview-message" class="screen">
+      <button type="button" class="back-link" data-go="write-message">← Edit words</button>
+      <p class="eyebrow" id="preview-slot-label">Monday · Morning</p>
+      <h1>How he’ll see it</h1>
+
+      <div class="preview-frame" id="final-preview" style="margin-top: 0.75rem">
+        <div class="kraft"></div>
+      </div>
+
+      <article class="message-shell" id="final-shell" data-kind="letter">
+        <p class="message-kind" id="final-kind">Love letter</p>
+        <p class="message-body" id="final-body"></p>
+      </article>
+
+      <div class="actions">
+        <button type="button" class="btn btn-primary" id="save-slot">Save this delivery</button>
+        <button type="button" class="btn btn-ghost" data-go="write-message">Edit words</button>
+      </div>
+    </section>
+
+    <div class="toast" id="toast">Saved</div>
+
+    <script src="./public/js/blooms-store.js"></script>
+    <script>
+      const STORAGE_KEY = "blooms:her-week-v2"
+      const MIN_FLOWERS = 4
+      const MAX_FLOWERS = 12
+      const FLOWER_BASE = "https://assets.pauwee.com/color/flowers"
+
+      const FLOWERS = [
+        "rose",
+        "peony",
+        "tulip",
+        "lily",
+        "daisy",
+        "ranunculus",
+        "orchid",
+        "sunflower",
+        "carnation",
+        "dahlia",
+        "anemone",
+        "zinnia",
+      ]
+
+      const DAY_NAMES = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
+
+      let flowerUid = 1
+      let selectedBloomId = null
+      let topZ = 10
+
+      function makeEmptyWeek() {
+        const slots = []
+        DAY_NAMES.forEach((day, dayIndex) => {
+          ;["morning", "night"].forEach((part) => {
+            slots.push({
+              id: `d${dayIndex}-${part}`,
+              day,
+              dayIndex,
+              part,
+              label: `${day} · ${part === "morning" ? "Morning" : "Night"}`,
+              flowers: [],
+              kind: part === "morning" ? "letter" : "note",
+              text: "",
+              done: false,
+            })
+          })
+        })
+        return slots
+      }
+
+      function normalizeFlowers(list) {
+        if (!Array.isArray(list)) return []
+        return list.map((item, i) => {
+          if (typeof item === "string") {
+            return createBloom(item, i)
+          }
+          return {
+            id: item.id || `legacy-${i}-${item.name}`,
+            name: item.name,
+            x: item.x ?? 20 + (i % 3) * 18,
+            y: item.y ?? 10 + Math.floor(i / 3) * 16,
+            size: item.size ?? 34,
+            z: item.z ?? i + 2,
+          }
+        })
+      }
+
+      function createBloom(name, index = 0) {
+        const id = `bloom-${Date.now()}-${flowerUid++}`
+        const offsets = [
+          { x: 30, y: 8 },
+          { x: 8, y: 18 },
+          { x: 52, y: 16 },
+          { x: 14, y: 36 },
+          { x: 48, y: 38 },
+          { x: 30, y: 40 },
+          { x: 22, y: 24 },
+          { x: 44, y: 26 },
+        ]
+        const spot = offsets[index % offsets.length]
+        const jitterX = (Math.random() * 8 - 4) * (index > 7 ? 1 : 0.3)
+        const jitterY = (Math.random() * 8 - 4) * (index > 7 ? 1 : 0.3)
+        topZ += 1
+        return {
+          id,
+          name,
+          x: Math.min(70, Math.max(0, spot.x + jitterX)),
+          y: Math.min(58, Math.max(0, spot.y + jitterY)),
+          size: 32 + (index % 3) * 2,
+          z: topZ,
+        }
+      }
+
+      function loadWeek() {
+        try {
+          const raw = localStorage.getItem(STORAGE_KEY) || localStorage.getItem("blooms:her-week")
+          if (!raw) return makeEmptyWeek()
+          const parsed = JSON.parse(raw)
+          if (!Array.isArray(parsed) || parsed.length !== 14) return makeEmptyWeek()
+          return parsed.map((slot) => ({
+            ...slot,
+            flowers: normalizeFlowers(slot.flowers),
+          }))
+        } catch {
+          return makeEmptyWeek()
+        }
+      }
+
+      function saveWeek(week) {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(week))
+        // Push every ready delivery into his dated inbox
+        if (window.BloomsStore) BloomsStore.syncWeekToInbox(week)
+      }
+
+      let week = loadWeek()
+      let editingId = null
+      let draft = null
+
+      function showScreen(id) {
+        document.querySelectorAll(".screen").forEach((el) => el.classList.remove("is-active"))
+        document.getElementById(id).classList.add("is-active")
+        window.scrollTo({ top: 0, behavior: "smooth" })
+      }
+
+      function toast(msg) {
+        const el = document.getElementById("toast")
+        el.textContent = msg
+        el.classList.add("is-on")
+        setTimeout(() => el.classList.remove("is-on"), 1800)
+      }
+
+      function doneCount() {
+        return week.filter((s) => s.done).length
+      }
+
+      function renderHome() {
+        const done = doneCount()
+        document.getElementById("progress-text").textContent = `${done} of 14 ready`
+        document.getElementById("progress-fill").style.width = `${(done / 14) * 100}%`
+
+        const list = document.getElementById("week-list")
+        list.innerHTML = DAY_NAMES.map((day, dayIndex) => {
+          const morning = week.find((s) => s.dayIndex === dayIndex && s.part === "morning")
+          const night = week.find((s) => s.dayIndex === dayIndex && s.part === "night")
+          return `
+            <div class="day-block">
+              <p class="day-name">${day}</p>
+              <div class="slot-row">
+                ${slotButton(morning)}
+                ${slotButton(night)}
+              </div>
+            </div>`
+        }).join("")
+
+        list.querySelectorAll("[data-edit]").forEach((btn) => {
+          btn.addEventListener("click", () => startEdit(btn.getAttribute("data-edit")))
+        })
+      }
+
+      function slotButton(slot) {
+        const when = slot.part === "morning" ? "Morning · before 10" : "Night · 11:00 PM"
+        const dateHint =
+          window.BloomsStore
+            ? BloomsStore.formatDate(BloomsStore.dateForWeekSlot(slot.dayIndex))
+            : ""
+        const state = slot.done ? "Ready" : "Tap to create"
+        const hint = slot.done
+          ? `${dateHint} · ${slot.flowers.length} flowers · ${slot.kind === "letter" ? "letter" : "note"}`
+          : dateHint || "Bouquet + words"
+        return `
+          <button type="button" class="slot-card ${slot.done ? "is-done" : ""}" data-edit="${slot.id}">
+            <span class="when">${when}</span>
+            <span class="state">${state}</span>
+            <span class="hint">${hint}</span>
+          </button>`
+      }
+
+      function startEdit(id) {
+        const slot = week.find((s) => s.id === id)
+        editingId = id
+        selectedBloomId = null
+        draft = {
+          flowers: normalizeFlowers(slot.flowers).map((f) => ({ ...f })),
+          kind: slot.kind,
+          text: slot.text,
+        }
+        topZ = Math.max(10, ...draft.flowers.map((f) => f.z || 0))
+        document.getElementById("bouquet-slot-label").textContent = slot.label
+        document.getElementById("message-slot-label").textContent = slot.label
+        document.getElementById("preview-slot-label").textContent = slot.label
+        renderFlowerGrid()
+        renderBouquetPreview("bouquet-preview", draft.flowers, true)
+        updateFlowerCount()
+        showScreen("build-bouquet")
+      }
+
+      function countOf(name) {
+        return draft.flowers.filter((f) => f.name === name).length
+      }
+
+      function renderFlowerGrid() {
+        const grid = document.getElementById("flower-grid")
+        grid.innerHTML = FLOWERS.map((name) => {
+          const qty = countOf(name)
+          return `
+            <button type="button" class="flower-pick" data-flower="${name}">
+              <img src="${FLOWER_BASE}/${name}.webp" alt="${name}" />
+              <span>${name}</span>
+              <span class="qty">${qty > 0 ? `×${qty}` : ""}</span>
+            </button>`
+        }).join("")
+
+        grid.querySelectorAll("[data-flower]").forEach((btn) => {
+          btn.addEventListener("click", () => addFlower(btn.getAttribute("data-flower")))
+        })
+      }
+
+      function addFlower(name) {
+        if (draft.flowers.length >= MAX_FLOWERS) {
+          toast(`Max ${MAX_FLOWERS} flowers`)
+          return
+        }
+        const bloom = createBloom(name, draft.flowers.length)
+        draft.flowers.push(bloom)
+        selectedBloomId = bloom.id
+        renderFlowerGrid()
+        renderBouquetPreview("bouquet-preview", draft.flowers, true)
+        updateFlowerCount()
+      }
+
+      function removeSelected() {
+        if (!selectedBloomId) {
+          toast("Tap a flower first")
+          return
+        }
+        draft.flowers = draft.flowers.filter((f) => f.id !== selectedBloomId)
+        selectedBloomId = null
+        renderFlowerGrid()
+        renderBouquetPreview("bouquet-preview", draft.flowers, true)
+        updateFlowerCount()
+      }
+
+      function bringSelectedForward() {
+        if (!selectedBloomId) {
+          toast("Tap a flower first")
+          return
+        }
+        topZ += 1
+        const flower = draft.flowers.find((f) => f.id === selectedBloomId)
+        if (flower) flower.z = topZ
+        renderBouquetPreview("bouquet-preview", draft.flowers, true)
+      }
+
+      function updateFlowerCount() {
+        const n = draft.flowers.length
+        const ok = n >= MIN_FLOWERS && n <= MAX_FLOWERS
+        document.getElementById("flower-count").textContent = ok
+          ? `${n} flowers · drag to arrange`
+          : `${n} flowers · add at least ${MIN_FLOWERS}`
+        document.getElementById("to-message").disabled = !ok
+      }
+
+      function renderBouquetPreview(containerId, flowers, editable) {
+        const box = document.getElementById(containerId)
+        box.innerHTML = `<div class="kraft"></div>`
+        flowers.forEach((flower) => {
+          const el = document.createElement("div")
+          el.className = "bloom"
+          if (editable && flower.id === selectedBloomId) el.classList.add("is-selected")
+          el.dataset.id = flower.id
+          el.style.left = `${flower.x}%`
+          el.style.top = `${flower.y}%`
+          el.style.width = `${flower.size}%`
+          el.style.zIndex = String(flower.z)
+          el.innerHTML = `<img src="${FLOWER_BASE}/${flower.name}.webp" alt="" />`
+          box.appendChild(el)
+          if (editable) enableDrag(el, box)
+        })
+      }
+
+      function enableDrag(el, box) {
+        let dragging = false
+        let startX = 0
+        let startY = 0
+        let origX = 0
+        let origY = 0
+
+        el.addEventListener("pointerdown", (e) => {
+          const flower = draft.flowers.find((f) => f.id === el.dataset.id)
+          if (!flower) return
+          dragging = true
+          selectedBloomId = flower.id
+          el.classList.add("is-dragging", "is-selected")
+          box.querySelectorAll(".bloom").forEach((b) => {
+            if (b !== el) b.classList.remove("is-selected")
+          })
+          startX = e.clientX
+          startY = e.clientY
+          origX = flower.x
+          origY = flower.y
+          el.setPointerCapture(e.pointerId)
+          e.preventDefault()
+        })
+
+        el.addEventListener("pointermove", (e) => {
+          if (!dragging) return
+          const flower = draft.flowers.find((f) => f.id === el.dataset.id)
+          if (!flower) return
+          const rect = box.getBoundingClientRect()
+          const dx = ((e.clientX - startX) / rect.width) * 100
+          const dy = ((e.clientY - startY) / rect.height) * 100
+          flower.x = Math.min(72, Math.max(-4, origX + dx))
+          flower.y = Math.min(62, Math.max(-4, origY + dy))
+          el.style.left = `${flower.x}%`
+          el.style.top = `${flower.y}%`
+        })
+
+        el.addEventListener("pointerup", () => {
+          if (!dragging) return
+          dragging = false
+          el.classList.remove("is-dragging")
+        })
+
+        el.addEventListener("pointercancel", () => {
+          dragging = false
+          el.classList.remove("is-dragging")
+        })
+      }
+
+      function openMessageWriter() {
+        document.getElementById("message-text").value = draft.text || ""
+        document.getElementById("char-count").textContent = (draft.text || "").length
+        document.querySelectorAll(".kind-toggle button").forEach((btn) => {
+          btn.classList.toggle("is-on", btn.getAttribute("data-kind") === draft.kind)
+        })
+        updateMessageButton()
+        showScreen("write-message")
+      }
+
+      function updateMessageButton() {
+        const text = document.getElementById("message-text").value.trim()
+        document.getElementById("to-preview").disabled = text.length < 2
+      }
+
+      function openPreview() {
+        draft.text = document.getElementById("message-text").value.trim()
+        renderBouquetPreview("final-preview", draft.flowers, false)
+        const shell = document.getElementById("final-shell")
+        shell.dataset.kind = draft.kind
+        document.getElementById("final-kind").textContent =
+          draft.kind === "letter" ? "Love letter" : "Small note"
+        document.getElementById("final-body").textContent = draft.text
+        showScreen("preview-message")
+      }
+
+      function saveCurrent() {
+        const idx = week.findIndex((s) => s.id === editingId)
+        if (idx < 0) return
+        week[idx] = {
+          ...week[idx],
+          flowers: draft.flowers.map((f) => ({ ...f })),
+          kind: draft.kind,
+          text: draft.text,
+          done: true,
+        }
+        saveWeek(week)
+        if (window.BloomsStore) BloomsStore.saveFromHerSlot(week[idx])
+        renderHome()
+        toast("Saved for him")
+        showScreen("home")
+      }
+
+      document.querySelectorAll("[data-go]").forEach((btn) => {
+        btn.addEventListener("click", () => showScreen(btn.getAttribute("data-go")))
+      })
+
+      document.getElementById("fill-next").addEventListener("click", () => {
+        const next = week.find((s) => !s.done)
+        if (!next) {
+          toast("All 14 are ready")
+          return
+        }
+        startEdit(next.id)
+      })
+
+      document.getElementById("to-message").addEventListener("click", openMessageWriter)
+      document.getElementById("back-to-bouquet").addEventListener("click", () => {
+        draft.text = document.getElementById("message-text").value
+        renderBouquetPreview("bouquet-preview", draft.flowers, true)
+        showScreen("build-bouquet")
+      })
+      document.getElementById("remove-selected").addEventListener("click", removeSelected)
+      document.getElementById("bring-front").addEventListener("click", bringSelectedForward)
+
+      document.querySelectorAll(".kind-toggle button").forEach((btn) => {
+        btn.addEventListener("click", () => {
+          draft.kind = btn.getAttribute("data-kind")
+          document.querySelectorAll(".kind-toggle button").forEach((b) => b.classList.remove("is-on"))
+          btn.classList.add("is-on")
+          const ta = document.getElementById("message-text")
+          if (!ta.value.trim()) {
+            ta.placeholder = draft.kind === "note" ? "A small note for him…" : "Good morning…"
+          }
+        })
+      })
+
+      document.getElementById("message-text").addEventListener("input", (e) => {
+        document.getElementById("char-count").textContent = e.target.value.length
+        updateMessageButton()
+      })
+
+      document.getElementById("to-preview").addEventListener("click", openPreview)
+      document.getElementById("save-slot").addEventListener("click", saveCurrent)
+
+      function refreshPairUI() {
+        const input = document.getElementById("couple-code-input")
+        const status = document.getElementById("pair-status")
+        const code = BloomsStore.getCoupleCode()
+        if (code) input.value = code
+        BloomsStore.health()
+          .then(() => {
+            status.textContent = code
+              ? `Connected · code ${code} · backend online`
+              : "Backend online — save a couple code to sync to him."
+          })
+          .catch(() => {
+            status.textContent = code
+              ? `Code ${code} saved locally. Start the backend to sync.`
+              : "Start the backend, then save a couple code."
+          })
+      }
+
+      document.getElementById("save-couple-code").addEventListener("click", async () => {
+        const code = document.getElementById("couple-code-input").value.trim()
+        if (code.length < 4) {
+          toast("Use at least 4 characters")
+          return
+        }
+        try {
+          await BloomsStore.pairCouple(code)
+          BloomsStore.syncWeekToInbox(week)
+          toast("Couple code saved")
+          refreshPairUI()
+        } catch (err) {
+          BloomsStore.setCoupleCode(code)
+          toast("Saved on this phone — start backend to sync")
+          refreshPairUI()
+        }
+      })
+
+      document.getElementById("make-couple-code").addEventListener("click", () => {
+        const words = ["ROSE", "DAWN", "PETAL", "HONEY", "MOON", "SOFT", "BLOOM", "KISS"]
+        const word = words[Math.floor(Math.random() * words.length)]
+        const num = Math.floor(1000 + Math.random() * 9000)
+        document.getElementById("couple-code-input").value = `${word}-${num}`
+        toast("New code ready — tap Save")
+      })
+
+      renderHome()
+      refreshPairUI()
+      // Keep his inbox in sync with anything already saved
+      if (window.BloomsStore) BloomsStore.syncWeekToInbox(week)
+    </script>
+  </body>
+</html>
