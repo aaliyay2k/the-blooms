@@ -602,24 +602,25 @@
       <p class="home-sub">
         She created a code on her side. Type it each time you open The Blooms.
       </p>
-      <form id="his-pair-form" autocomplete="off" onsubmit="return false">
+      <form id="his-pair-form" autocomplete="off" onsubmit="return false;">
+        <!-- decoy fields so browsers don't autofill the real couple code -->
         <input
-          id="his-couple-code"
-          name="blooms-couple-code-fresh"
           type="text"
-          inputmode="text"
-          maxlength="20"
-          placeholder="Enter couple code"
-          value=""
-          autocomplete="off"
-          autocorrect="off"
-          autocapitalize="characters"
-          spellcheck="false"
-          data-lpignore="true"
-          data-1p-ignore="true"
-          data-form-type="other"
-          style="width:100%;border:1px solid rgba(30,74,55,.2);border-radius:14px;padding:.9rem 1rem;font:inherit;text-transform:uppercase;letter-spacing:.04em;margin:1rem 0;background:rgba(255,250,244,.9)"
+          name="username"
+          autocomplete="username"
+          tabindex="-1"
+          aria-hidden="true"
+          style="position:absolute;left:-9999px;width:1px;height:1px;opacity:0"
         />
+        <input
+          type="password"
+          name="password"
+          autocomplete="current-password"
+          tabindex="-1"
+          aria-hidden="true"
+          style="position:absolute;left:-9999px;width:1px;height:1px;opacity:0"
+        />
+        <div id="his-couple-code-host"></div>
       </form>
       <button type="button" class="btn btn-primary" id="his-pair-btn">Open our garden</button>
       <p class="home-sub" id="his-pair-status" style="margin-top:1rem"></p>
@@ -924,26 +925,63 @@
       document.getElementById("read-words").addEventListener("click", openMessage)
       document.getElementById("message-back").addEventListener("click", () => showScreen("bouquet"))
 
-      function clearCoupleCodeField() {
+      const CODE_INPUT_STYLE =
+        "width:100%;border:1px solid rgba(30,74,55,.2);border-radius:14px;padding:.9rem 1rem;font:inherit;text-transform:uppercase;letter-spacing:.04em;margin:1rem 0;background:rgba(255,250,244,.9)"
+
+      function wipeSavedCoupleCode() {
+        try {
+          localStorage.removeItem("blooms:couple-code")
+          sessionStorage.removeItem("blooms:couple-code")
+        } catch (_) {}
         BloomsStore.setCoupleCode("")
-        const input = document.getElementById("his-couple-code")
-        if (!input) return
+      }
+
+      function mountEmptyCoupleCodeInput() {
+        wipeSavedCoupleCode()
+        const host = document.getElementById("his-couple-code-host")
+        host.innerHTML = ""
+        const input = document.createElement("input")
+        input.id = "his-couple-code"
+        // Unique name every open so the browser cannot match prior autofill history
+        input.name = `blooms-code-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`
+        input.type = "text"
+        input.inputMode = "text"
+        input.maxLength = 20
+        input.placeholder = "Enter couple code"
+        input.autocomplete = "new-password"
+        input.setAttribute("autocorrect", "off")
+        input.setAttribute("autocapitalize", "characters")
+        input.spellcheck = false
+        input.setAttribute("data-lpignore", "true")
+        input.setAttribute("data-1p-ignore", "true")
+        input.setAttribute("data-form-type", "other")
+        input.setAttribute("readonly", "readonly")
         input.value = ""
-        input.setAttribute("value", "")
-        // Beat browser autofill that runs after load
-        requestAnimationFrame(() => {
-          input.value = ""
+        input.style.cssText = CODE_INPUT_STYLE
+        input.addEventListener("focus", () => {
+          input.removeAttribute("readonly")
+          // Clear again in case autofill slipped in on focus
+          if (!input.dataset.userEdited) input.value = ""
         })
-        setTimeout(() => {
-          input.value = ""
-        }, 50)
-        setTimeout(() => {
-          input.value = ""
-        }, 300)
+        input.addEventListener("keydown", () => {
+          input.dataset.userEdited = "1"
+        })
+        input.addEventListener("beforeinput", () => {
+          input.dataset.userEdited = "1"
+        })
+        host.appendChild(input)
+        // Strip any delayed autofill
+        ;[0, 50, 150, 400, 800].forEach((ms) => {
+          setTimeout(() => {
+            if (input.dataset.userEdited) return
+            if (input.value) input.value = ""
+          }, ms)
+        })
+        return input
       }
 
       async function showPairScreen(message) {
-        clearCoupleCodeField()
+        mountEmptyCoupleCodeInput()
         document.getElementById("his-pair-status").textContent = message || ""
         document.querySelectorAll(".screen").forEach((el) => el.classList.remove("is-active"))
         document.getElementById("pair").classList.add("is-active")
@@ -961,13 +999,13 @@
       }
 
       async function boot() {
-        // Always ask for the couple code when the app/website opens
+        wipeSavedCoupleCode()
         await showPairScreen("Enter your couple code to open The Blooms.")
       }
 
       window.addEventListener("pageshow", () => {
         if (document.getElementById("pair")?.classList.contains("is-active")) {
-          clearCoupleCodeField()
+          mountEmptyCoupleCodeInput()
         }
       })
 
@@ -980,7 +1018,8 @@
       })
 
       document.getElementById("his-pair-btn").addEventListener("click", async () => {
-        const code = document.getElementById("his-couple-code").value.trim()
+        const input = document.getElementById("his-couple-code")
+        const code = (input?.value || "").trim()
         const status = document.getElementById("his-pair-status")
         if (code.length < 4) {
           status.textContent = "Ask her for the couple code."
@@ -989,9 +1028,17 @@
         try {
           await BloomsStore.pairCouple(code, { role: "him" })
           status.textContent = "Connected."
+          // Drop the typed value so it is not left for the browser to remember
+          if (input) {
+            input.value = ""
+            input.dataset.userEdited = ""
+          }
+          mountEmptyCoupleCodeInput()
+          // Keep code only for this session's API calls
+          BloomsStore.setCoupleCode(code)
           document.getElementById("pair").classList.remove("is-active")
           document.getElementById("home").classList.add("is-active")
-          document.getElementById("home-couple-code").textContent = `Paired · ${code.toUpperCase()}`
+          document.getElementById("home-couple-code").textContent = "Paired"
           await BloomsStore.pullInbox()
           refreshHome()
           renderInstallSteps()

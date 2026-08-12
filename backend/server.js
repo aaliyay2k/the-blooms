@@ -196,6 +196,13 @@ app.get(
   }),
 )
 
+app.use((req, res, next) => {
+  if (req.path === "/" || req.path.endsWith(".html") || req.path === "/sw.js") {
+    res.set("Cache-Control", "no-store, no-cache, must-revalidate")
+    res.set("Pragma", "no-cache")
+  }
+  next()
+})
 app.use(express.static(SITE_ROOT))
 app.get("/", (_req, res) => {
   res.sendFile(path.join(SITE_ROOT, "index.html"))
