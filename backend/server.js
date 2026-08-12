@@ -4,7 +4,7 @@ import express from "express"
 import path from "path"
 import { fileURLToPath } from "url"
 import { connectDb, findCouple, getOrCreateCouple, isDbReady, sortDeliveries } from "./db.js"
-import { notifyPart, pushEnabled, startNotificationScheduler } from "./notify.js"
+import { notifyPart, notifyHerWriteReminders, pushEnabled, startNotificationScheduler } from "./notify.js"
 
 dotenv.config()
 
@@ -55,20 +55,22 @@ app.post(
   asyncHandler(async (req, res) => {
     const couple = await findCouple(req.params.code)
     const subscription = req.body?.subscription
+    const role = String(req.body?.role || "him").toLowerCase() === "her" ? "her" : "him"
     if (!subscription?.endpoint) {
       return res.status(400).json({ error: "Missing push subscription" })
     }
 
-    const list = Array.isArray(couple.pushSubscriptions) ? [...couple.pushSubscriptions] : []
+    const field = role === "her" ? "herPushSubscriptions" : "pushSubscriptions"
+    const list = Array.isArray(couple[field]) ? [...couple[field]] : []
     const idx = list.findIndex((s) => s.endpoint === subscription.endpoint)
     if (idx >= 0) list[idx] = subscription
     else list.push(subscription)
 
-    couple.pushSubscriptions = list
-    couple.markModified("pushSubscriptions")
+    couple[field] = list
+    couple.markModified(field)
     await couple.save()
 
-    res.json({ ok: true, devices: list.length })
+    res.json({ ok: true, role, devices: list.length })
   }),
 )
 
@@ -80,8 +82,14 @@ app.post(
       return res.status(401).json({ error: "Unauthorized" })
     }
     const part = req.body?.part || req.query?.part
+    if (part === "her-reminder") {
+      const result = await notifyHerWriteReminders()
+      return res.json(result)
+    }
     if (part !== "morning" && part !== "night") {
-      return res.status(400).json({ error: 'part must be "morning" or "night"' })
+      return res.status(400).json({
+        error: 'part must be "morning", "night", or "her-reminder"',
+      })
     }
     const result = await notifyPart(part)
     res.json(result)
@@ -328,7 +336,7 @@ async function start() {
     console.log(`His side:     http://localhost:${PORT}/`)
     console.log(`Your side:    http://localhost:${PORT}/the-blooms.html`)
     console.log(`Database:     ${isDbReady() ? "MongoDB connected" : "NOT connected — add MONGODB_URI"}`)
-    console.log(`Push:         ${pushEnabled ? "enabled (10 AM & 11 PM IST)" : "disabled"}`)
+    console.log(`Push:         ${pushEnabled ? "enabled (him 10/23, her 12/19 IST)" : "disabled"}`)
     startNotificationScheduler()
   })
 }

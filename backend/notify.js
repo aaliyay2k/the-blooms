@@ -26,15 +26,24 @@ function todayKeyInIndia(date = new Date()) {
   }).format(date)
 }
 
-async function sendToCouple(couple, payload) {
-  if (!pushEnabled || !couple.pushSubscriptions?.length) return { sent: 0, removed: 0 }
+function subscriptionsForRole(couple, role) {
+  if (role === "her") {
+    return Array.isArray(couple.herPushSubscriptions) ? couple.herPushSubscriptions : []
+  }
+  return Array.isArray(couple.pushSubscriptions) ? couple.pushSubscriptions : []
+}
+
+async function sendToRole(couple, role, payload) {
+  if (!pushEnabled) return { sent: 0, removed: 0 }
+  const list = subscriptionsForRole(couple, role)
+  if (!list.length) return { sent: 0, removed: 0 }
 
   const body = JSON.stringify(payload)
   const keep = []
   let sent = 0
   let removed = 0
 
-  for (const sub of couple.pushSubscriptions) {
+  for (const sub of list) {
     try {
       await webpush.sendNotification(sub, body)
       keep.push(sub)
@@ -50,9 +59,10 @@ async function sendToCouple(couple, payload) {
     }
   }
 
-  if (removed > 0 || keep.length !== couple.pushSubscriptions.length) {
-    couple.pushSubscriptions = keep
-    couple.markModified("pushSubscriptions")
+  const field = role === "her" ? "herPushSubscriptions" : "pushSubscriptions"
+  if (removed > 0 || keep.length !== list.length) {
+    couple[field] = keep
+    couple.markModified(field)
     await couple.save()
   }
 
@@ -76,14 +86,13 @@ export async function notifyPart(part) {
     )
     if (!delivery) continue
 
-    const title =
-      part === "morning" ? "Good morning 🌸" : "Good night 🌙"
+    const title = part === "morning" ? "Good morning 🌸" : "Good night 🌙"
     const body =
       part === "morning"
         ? "Your morning bouquet and note are waiting in The Blooms."
         : "Your night bouquet and note are waiting in The Blooms."
 
-    const result = await sendToCouple(couple, {
+    const result = await sendToRole(couple, "him", {
       title,
       body,
       url: "/",
@@ -98,10 +107,46 @@ export async function notifyPart(part) {
   return { ok: true, dateKey, part, couplesNotified, totalSent }
 }
 
+/** Her phone: remaining notes reminder at 12:00 and 19:00 IST */
+export async function notifyHerWriteReminders() {
+  if (!isDbReady()) {
+    console.warn("Skip her reminder — database not ready")
+    return { ok: false, reason: "db" }
+  }
+
+  const couples = await Couple.find({})
+  let totalSent = 0
+  let couplesNotified = 0
+
+  for (const couple of couples) {
+    const week = Array.isArray(couple.week) ? couple.week : []
+    if (!week.length) continue
+
+    const remaining = week.filter((s) => !s.done).length
+    if (remaining <= 0) continue
+
+    const title =
+      remaining === 1 ? "1 note remaining to write" : `${remaining} notes remaining to write`
+    const body = "Open The Blooms and finish today’s empty slots for him."
+
+    const result = await sendToRole(couple, "her", {
+      title,
+      body,
+      url: "/the-blooms.html",
+      part: "her-reminder",
+    })
+    totalSent += result.sent
+    if (result.sent > 0) couplesNotified += 1
+  }
+
+  console.log(`Her write reminders: ${couplesNotified} couples, ${totalSent} pushes`)
+  return { ok: true, part: "her-reminder", couplesNotified, totalSent }
+}
+
 export function startNotificationScheduler() {
   if (!pushEnabled) return
 
-  // 10:00 AM India
+  // 10:00 AM India — him morning
   cron.schedule(
     "0 10 * * *",
     () => {
@@ -110,7 +155,7 @@ export function startNotificationScheduler() {
     { timezone: "Asia/Kolkata" },
   )
 
-  // 11:00 PM India
+  // 11:00 PM India — him night
   cron.schedule(
     "0 23 * * *",
     () => {
@@ -119,5 +164,25 @@ export function startNotificationScheduler() {
     { timezone: "Asia/Kolkata" },
   )
 
-  console.log("Notification schedule ready: 10:00 AM & 11:00 PM Asia/Kolkata")
+  // 12:00 PM India — her write reminder
+  cron.schedule(
+    "0 12 * * *",
+    () => {
+      notifyHerWriteReminders().catch((err) => console.error(err))
+    },
+    { timezone: "Asia/Kolkata" },
+  )
+
+  // 7:00 PM India — her write reminder
+  cron.schedule(
+    "0 19 * * *",
+    () => {
+      notifyHerWriteReminders().catch((err) => console.error(err))
+    },
+    { timezone: "Asia/Kolkata" },
+  )
+
+  console.log(
+    "Notification schedule ready: him 10:00 & 23:00; her reminders 12:00 & 19:00 Asia/Kolkata",
+  )
 }

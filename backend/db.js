@@ -18,6 +18,7 @@ const CoupleSchema = new mongoose.Schema(
     week: { type: [mongoose.Schema.Types.Mixed], default: [] },
     deliveries: { type: [mongoose.Schema.Types.Mixed], default: [] },
     pushSubscriptions: { type: [mongoose.Schema.Types.Mixed], default: [] },
+    herPushSubscriptions: { type: [mongoose.Schema.Types.Mixed], default: [] },
     activity: {
       type: mongoose.Schema.Types.Mixed,
       default: () => ({
@@ -132,6 +133,7 @@ export async function getOrCreateCouple(rawCode) {
       week: [],
       deliveries: [],
       pushSubscriptions: [],
+      herPushSubscriptions: [],
     })
   }
   return couple

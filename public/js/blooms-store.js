@@ -344,6 +344,66 @@ window.BloomsStore = (function () {
     return api(`/api/couple/${encodeURIComponent(code)}/activity`)
   }
 
+  function urlBase64ToUint8Array(base64String) {
+    const padding = "=".repeat((4 - (base64String.length % 4)) % 4)
+    const base64 = (base64String + padding).replace(/-/g, "+").replace(/_/g, "/")
+    const raw = atob(base64)
+    const output = new Uint8Array(raw.length)
+    for (let i = 0; i < raw.length; i += 1) output[i] = raw.charCodeAt(i)
+    return output
+  }
+
+  /** Must be called from a user tap so mobile browsers show Allow. */
+  async function enablePushNotifications(role = "him") {
+    if (!("serviceWorker" in navigator) || !("PushManager" in window)) {
+      throw new Error("Notifications need Chrome/Safari with Add to Home Screen on iPhone.")
+    }
+    if (!window.isSecureContext) {
+      throw new Error("Notifications need HTTPS.")
+    }
+
+    const code = getCoupleCode()
+    if (!code) throw new Error("Enter the couple code first.")
+
+    const reg = await navigator.serviceWorker.register("/sw.js")
+    await navigator.serviceWorker.ready
+
+    let permission = Notification.permission
+    if (permission === "default") {
+      permission = await Notification.requestPermission()
+    }
+    if (permission !== "granted") {
+      throw new Error("Notification permission was not allowed.")
+    }
+
+    const keyRes = await fetch(`${getApiBase()}/api/push/public-key`)
+    if (!keyRes.ok) throw new Error("Push is not configured on the server yet.")
+    const { publicKey } = await keyRes.json()
+
+    let subscription = await reg.pushManager.getSubscription()
+    if (!subscription) {
+      subscription = await reg.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: urlBase64ToUint8Array(publicKey),
+      })
+    }
+
+    await api(`/api/couple/${encodeURIComponent(code)}/push-subscribe`, {
+      method: "POST",
+      body: JSON.stringify({ subscription, role }),
+    })
+
+    return { ok: true, permission }
+  }
+
+  function notificationPermission() {
+    try {
+      return Notification.permission
+    } catch {
+      return "unsupported"
+    }
+  }
+
   return {
     WEEK_KEY,
     getInbox,
@@ -375,6 +435,8 @@ window.BloomsStore = (function () {
     trackAppOpen,
     trackMessageRead,
     fetchActivity,
+    enablePushNotifications,
+    notificationPermission,
     read,
     write,
   }

@@ -635,9 +635,14 @@
       <p class="progress" id="progress-text">0 of 14 ready</p>
       <div class="progress-bar" aria-hidden="true"><span id="progress-fill"></span></div>
 
-      <div class="reminder-card" id="write-reminder">
-        <h2 id="reminder-title">Notes remaining</h2>
-        <p id="reminder-body">Likh na — finish the empty slots for this plan.</p>
+      <div class="activity-card" id="her-notify-card">
+        <h2>Your write reminders</h2>
+        <p id="her-notify-status">
+          Get a phone notification at 12:00 PM and 7:00 PM (India time) when notes are still left.
+        </p>
+        <button type="button" class="btn btn-primary" id="enable-her-notify" style="margin-top: 0.75rem; width: 100%">
+          Allow reminder notifications
+        </button>
       </div>
 
       <div class="activity-card" id="his-activity">
@@ -746,7 +751,7 @@
 
     <div class="toast" id="toast">Saved</div>
 
-    <script src="./public/js/blooms-store.js?v=20260812e"></script>
+    <script src="./public/js/blooms-store.js?v=20260812f"></script>
     <script>
       const LEGACY_STORAGE_KEY = "blooms:her-week-v2"
       const OFFSET_KEY = "blooms:plan-week-offset"
@@ -940,27 +945,31 @@
         return week.filter((s) => !s.done).length
       }
 
-      function renderWriteReminder() {
+      function refreshHerNotifyStatus() {
+        const status = document.getElementById("her-notify-status")
+        const btn = document.getElementById("enable-her-notify")
+        const permission = BloomsStore.notificationPermission()
         const left = remainingCount()
-        const card = document.getElementById("write-reminder")
-        const title = document.getElementById("reminder-title")
-        const body = document.getElementById("reminder-body")
-        const weekLabel = weekOffset === 1 ? "next week" : "this week"
+        const leftLine =
+          left > 0
+            ? `${left} note${left === 1 ? "" : "s"} still remaining on this plan.`
+            : "All notes for this plan are ready."
 
-        if (left <= 0) {
-          card.classList.add("is-done")
-          title.textContent = "All notes ready"
-          body.textContent = `Sab likh diya for ${weekLabel} — 14/14 synced for him.`
+        if (permission === "granted") {
+          status.textContent = `${leftLine} Reminders on — 12:00 PM & 7:00 PM India time.`
+          btn.textContent = "Reminders enabled"
+          btn.disabled = true
           return
         }
-
-        card.classList.remove("is-done")
-        title.textContent =
-          left === 1 ? "1 note remaining to write" : `${left} notes remaining to write`
-        body.textContent =
-          left === 1
-            ? `Likh na — one last bouquet + note left for ${weekLabel}.`
-            : `Likh na — ${left} bouquet + note slots still empty for ${weekLabel}.`
+        if (permission === "denied") {
+          status.textContent = `${leftLine} Notifications are blocked — allow them in phone settings, then tap again.`
+          btn.textContent = "Try reminders again"
+          btn.disabled = false
+          return
+        }
+        status.textContent = `${leftLine} Tap below to allow 12:00 PM & 7:00 PM reminders on this phone.`
+        btn.textContent = "Allow reminder notifications"
+        btn.disabled = false
       }
 
       function formatWhen(iso) {
@@ -1051,7 +1060,7 @@
         document.getElementById("progress-text").textContent =
           left > 0 ? `${done} of 14 ready · ${left} remaining to write` : `${done} of 14 ready`
         document.getElementById("progress-fill").style.width = `${(done / 14) * 100}%`
-        renderWriteReminder()
+        refreshHerNotifyStatus()
         renderHisActivity()
 
         const list = document.getElementById("week-list")
@@ -1381,6 +1390,25 @@
       document.getElementById("refresh-activity").addEventListener("click", async () => {
         await renderHisActivity()
         toast("Activity refreshed")
+      })
+
+      document.getElementById("enable-her-notify").addEventListener("click", async () => {
+        const status = document.getElementById("her-notify-status")
+        const btn = document.getElementById("enable-her-notify")
+        if (!BloomsStore.getCoupleCode()) {
+          toast("Save your couple code first")
+          return
+        }
+        btn.disabled = true
+        status.textContent = "Asking your phone for permission…"
+        try {
+          await BloomsStore.enablePushNotifications("her")
+          toast("Reminders on")
+          refreshHerNotifyStatus()
+        } catch (err) {
+          status.textContent = err.message || "Couldn’t enable reminders."
+          refreshHerNotifyStatus()
+        }
       })
 
       // Stamp next/this week dates + push every ready letter to his dated inbox
