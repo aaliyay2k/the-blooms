@@ -779,11 +779,9 @@
         document.getElementById(id).classList.add("is-active")
         window.scrollTo({ top: 0, behavior: "smooth" })
 
+        // Night colors only while reading a night delivery — home stays soft dawn always
         const nightMode = id === "bouquet" && activeDelivery?.part === "night"
-        document.body.classList.toggle(
-          "is-night-theme",
-          nightMode || (id === "home" && new Date().getHours() >= 23),
-        )
+        document.body.classList.toggle("is-night-theme", nightMode)
       }
 
       function renderBouquet(flowers) {
