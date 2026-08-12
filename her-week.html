@@ -608,7 +608,42 @@
   <body>
     <!-- HER POV: prepare 14 deliveries for the week -->
 
-    <section id="home" class="screen is-active">
+    <section id="pair" class="screen is-active" aria-label="Enter couple code">
+      <p class="brand">The Blooms</p>
+      <p class="eyebrow">Your side</p>
+      <h1 class="home-hello" style="font-family:var(--font-display);font-size:clamp(1.85rem,7vw,2.35rem);letter-spacing:-0.02em;margin:0.35rem 0 0">
+        Enter your couple code
+      </h1>
+      <p class="lede">
+        Type it each time you open your side — then your week planner and sync unlock here.
+      </p>
+      <div
+        id="her-couple-code"
+        role="textbox"
+        aria-label="Couple code"
+        contenteditable="true"
+        spellcheck="false"
+        autocapitalize="characters"
+        data-placeholder="Enter couple code"
+        style="width:100%;border:1px solid rgba(30,74,55,.2);border-radius:14px;padding:.9rem 1rem;font:inherit;text-transform:uppercase;letter-spacing:.04em;margin:1rem 0;background:rgba(255,250,244,.9);min-height:1.25em;outline:none"
+      ></div>
+      <style>
+        #her-couple-code:empty::before {
+          content: attr(data-placeholder);
+          color: rgba(30, 74, 55, 0.45);
+          text-transform: none;
+          letter-spacing: 0;
+          pointer-events: none;
+        }
+      </style>
+      <button type="button" class="btn btn-primary" id="her-pair-btn" style="width:100%">Open my planner</button>
+      <button type="button" class="btn btn-ghost" id="her-make-code-gate" style="width:100%;margin-top:0.55rem">
+        Make a new code
+      </button>
+      <p class="lede" id="her-pair-status" style="margin-top:1rem"></p>
+    </section>
+
+    <section id="home" class="screen">
       <p class="brand">The Blooms</p>
       <p class="eyebrow">Your side</p>
       <h1 id="week-title">Prepare next week</h1>
@@ -623,17 +658,11 @@
       </div>
 
       <div class="pair-box" id="pair-box">
-        <p class="pick-label">Couple code (share once with him — not every day)</p>
-        <div class="pair-row">
-          <input id="couple-code-input" type="text" maxlength="20" placeholder="e.g. ROSE-4242" />
-          <button type="button" class="btn btn-primary" id="save-couple-code">Save</button>
-        </div>
-        <div class="pair-row" style="margin-top: 0.45rem">
-          <button type="button" class="btn btn-ghost" id="make-couple-code" style="grid-column: 1 / -1">
-            Make a new code
-          </button>
-        </div>
-        <p class="count-line" id="pair-status">Connect once so his phone can receive your saves.</p>
+        <p class="pick-label">Couple code (connected this session)</p>
+        <p class="count-line" id="pair-status">Enter code on open to sync.</p>
+        <button type="button" class="btn btn-ghost" id="change-her-code" style="width:100%;margin-top:0.55rem">
+          Change couple code
+        </button>
       </div>
 
       <p class="progress" id="progress-text">0 of 14 ready</p>
@@ -766,7 +795,7 @@
 
     <div class="toast" id="toast">Saved</div>
 
-    <script src="./public/js/blooms-store.js?v=20260812h"></script>
+    <script src="./public/js/blooms-store.js?v=20260812i"></script>
     <script>
       const LEGACY_STORAGE_KEY = "blooms:her-week-v2"
       const OFFSET_KEY = "blooms:plan-week-offset"
@@ -1550,51 +1579,84 @@
       })
 
       function refreshPairUI() {
-        const input = document.getElementById("couple-code-input")
         const status = document.getElementById("pair-status")
         const code = BloomsStore.getCoupleCode()
-        if (code) input.value = code
         BloomsStore.health()
           .then(() => {
             status.textContent = code
-              ? `Connected · code ${code} · backend online`
-              : "Backend online — save a couple code to sync to him."
+              ? `Connected · ${code} · backend online`
+              : "Backend online — enter your couple code to sync."
           })
           .catch(() => {
             status.textContent = code
-              ? `Code ${code} saved locally. Start the backend to sync.`
-              : "Start the backend, then save a couple code."
+              ? `Code ${code} on this session. Backend offline.`
+              : "Start the backend, then enter your couple code."
           })
       }
 
-      document.getElementById("save-couple-code").addEventListener("click", async () => {
-        const code = document.getElementById("couple-code-input").value.trim()
-        if (code.length < 4) {
-          toast("Use at least 4 characters")
+      function showHerPairGate(message) {
+        try {
+          localStorage.removeItem("blooms:couple-code")
+        } catch (_) {}
+        BloomsStore.setCoupleCode("")
+        const box = document.getElementById("her-couple-code")
+        if (box) {
+          box.textContent = ""
+          box.innerHTML = ""
+        }
+        document.getElementById("her-pair-status").textContent =
+          message || "Enter your couple code to open your planner."
+        document.querySelectorAll(".screen").forEach((el) => el.classList.remove("is-active"))
+        document.getElementById("pair").classList.add("is-active")
+      }
+
+      async function unlockHerPlanner(code) {
+        const status = document.getElementById("her-pair-status")
+        const clean = String(code || "").trim()
+        if (clean.length < 4) {
+          status.textContent = "Use at least 4 characters."
           return
         }
+        status.textContent = "Connecting…"
         try {
-          await BloomsStore.pairCouple(code, { role: "her" })
-          week = await syncFromCloud(week)
-          week = await saveWeek(week, weekOffset)
-          toast("Couple code saved — synced")
-          refreshPairUI()
-          renderHome()
-          renderHisActivity()
+          await BloomsStore.pairCouple(clean, { role: "her" })
         } catch (err) {
-          BloomsStore.setCoupleCode(code)
-          toast("Saved on this phone — start backend to sync")
-          refreshPairUI()
-          renderHisActivity()
+          BloomsStore.setCoupleCode(clean)
+        }
+        document.getElementById("pair").classList.remove("is-active")
+        document.getElementById("home").classList.add("is-active")
+        week = await syncFromCloud(week)
+        week = await saveWeek(week, weekOffset)
+        renderHome()
+        refreshPairUI()
+        renderHisActivity()
+        toast("Unlocked — synced")
+      }
+
+      document.getElementById("her-pair-btn").addEventListener("click", () => {
+        const code = (document.getElementById("her-couple-code").innerText || "").replace(/\s+/g, "").trim()
+        unlockHerPlanner(code)
+      })
+
+      document.getElementById("her-couple-code").addEventListener("keydown", (e) => {
+        if (e.key === "Enter") {
+          e.preventDefault()
+          document.getElementById("her-pair-btn").click()
         }
       })
 
-      document.getElementById("make-couple-code").addEventListener("click", () => {
+      document.getElementById("her-make-code-gate").addEventListener("click", () => {
         const words = ["ROSE", "DAWN", "PETAL", "HONEY", "MOON", "SOFT", "BLOOM", "KISS"]
         const word = words[Math.floor(Math.random() * words.length)]
         const num = Math.floor(1000 + Math.random() * 9000)
-        document.getElementById("couple-code-input").value = `${word}-${num}`
-        toast("New code ready — tap Save")
+        const code = `${word}-${num}`
+        document.getElementById("her-couple-code").textContent = code
+        document.getElementById("her-pair-status").textContent =
+          "New code ready — tap Open my planner, then share this code with him once."
+      })
+
+      document.getElementById("change-her-code").addEventListener("click", () => {
+        showHerPairGate("Enter the couple code again.")
       })
 
       document.querySelectorAll("#week-offset-toggle [data-week-offset]").forEach((btn) => {
@@ -1610,7 +1672,8 @@
         const status = document.getElementById("her-notify-status")
         const btn = document.getElementById("enable-her-notify")
         if (!BloomsStore.getCoupleCode()) {
-          toast("Save your couple code first")
+          toast("Enter your couple code first")
+          showHerPairGate("Enter your couple code first.")
           return
         }
         btn.disabled = true
@@ -1625,13 +1688,9 @@
         }
       })
 
-      // Pull cloud letters onto this device, then push any local-only saves up
-      ;(async () => {
-        week = await syncFromCloud(week)
-        week = await saveWeek(week, weekOffset)
-        renderHome()
-        refreshPairUI()
-      })()
+      // Always ask for couple code when her side opens
+      showHerPairGate("Enter your couple code to open The Blooms.")
+      renderHome()
     </script>
   </body>
 </html>
