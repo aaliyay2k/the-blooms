@@ -31,6 +31,57 @@ window.BloomsStore = (function () {
     return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`
   }
 
+  /** Calendar date in Asia/Kolkata (matches push schedule). */
+  function dateKeyInIndia(date = new Date()) {
+    return new Intl.DateTimeFormat("en-CA", {
+      timeZone: "Asia/Kolkata",
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+    }).format(date)
+  }
+
+  function addDaysToKey(key, days) {
+    const [y, m, d] = String(key).split("-").map(Number)
+    const dt = new Date(Date.UTC(y, m - 1, d))
+    dt.setUTCDate(dt.getUTCDate() + days)
+    return `${dt.getUTCFullYear()}-${pad(dt.getUTCMonth() + 1)}-${pad(dt.getUTCDate())}`
+  }
+
+  function weekdayIndexMon0InIndia(date = new Date()) {
+    const wd = new Intl.DateTimeFormat("en-US", {
+      timeZone: "Asia/Kolkata",
+      weekday: "short",
+    }).format(date)
+    return { Mon: 0, Tue: 1, Wed: 2, Thu: 3, Fri: 4, Sat: 5, Sun: 6 }[wd] ?? 0
+  }
+
+  function getMondayKeyInIndia(from = new Date()) {
+    return addDaysToKey(dateKeyInIndia(from), -weekdayIndexMon0InIndia(from))
+  }
+
+  function formatDateKey(key) {
+    const [y, m, d] = String(key).split("-").map(Number)
+    const dt = new Date(Date.UTC(y, m - 1, d, 12))
+    return dt.toLocaleDateString("en-IN", {
+      weekday: "long",
+      month: "short",
+      day: "numeric",
+      year: "numeric",
+      timeZone: "UTC",
+    })
+  }
+
+  function shortDateKey(key) {
+    const [y, m, d] = String(key).split("-").map(Number)
+    const dt = new Date(Date.UTC(y, m - 1, d, 12))
+    return dt.toLocaleDateString("en-IN", {
+      month: "short",
+      day: "numeric",
+      timeZone: "UTC",
+    })
+  }
+
   function formatDate(date) {
     return date.toLocaleDateString(undefined, {
       weekday: "long",
@@ -41,12 +92,9 @@ window.BloomsStore = (function () {
   }
 
   function getMonday(from = new Date()) {
-    const d = new Date(from)
-    const day = d.getDay()
-    const diff = day === 0 ? -6 : 1 - day
-    d.setHours(0, 0, 0, 0)
-    d.setDate(d.getDate() + diff)
-    return d
+    const key = getMondayKeyInIndia(from)
+    const [y, m, d] = key.split("-").map(Number)
+    return new Date(y, m - 1, d)
   }
 
   function dateForWeekSlot(dayIndex, from = new Date()) {
@@ -54,6 +102,22 @@ window.BloomsStore = (function () {
     const d = new Date(monday)
     d.setDate(monday.getDate() + dayIndex)
     return d
+  }
+
+  /** Attach calendar dates (IST week) to every planner slot. */
+  function stampWeekDates(week, from = new Date()) {
+    const mondayKey = getMondayKeyInIndia(from)
+    return (week || []).map((slot) => {
+      const key = addDaysToKey(mondayKey, slot.dayIndex)
+      const partLabel = slot.part === "morning" ? "Morning" : "Night"
+      return {
+        ...slot,
+        weekStartKey: mondayKey,
+        dateKey: key,
+        dateLabel: formatDateKey(key),
+        label: `${slot.day} · ${partLabel} · ${shortDateKey(key)}`,
+      }
+    })
   }
 
   function getApiBase() {
@@ -122,13 +186,13 @@ window.BloomsStore = (function () {
 
   function deliveryFromSlot(slot) {
     if (!slot || !slot.done) return null
-    const when = dateForWeekSlot(slot.dayIndex)
-    const key = dateKey(when)
+    const key = slot.dateKey || dateKey(dateForWeekSlot(slot.dayIndex))
+    const dateLabel = slot.dateLabel || formatDateKey(key)
     return {
       id: `${key}-${slot.part}`,
       slotId: slot.id,
       dateKey: key,
-      dateLabel: formatDate(when),
+      dateLabel,
       part: slot.part,
       whenLabel: slot.part === "morning" ? "Morning" : "Night",
       title:
@@ -205,7 +269,7 @@ window.BloomsStore = (function () {
   }
 
   function getTodayKey(from = new Date()) {
-    return dateKey(from)
+    return dateKeyInIndia(from)
   }
 
   function getTodayDelivery(part, from = new Date()) {
@@ -248,6 +312,12 @@ window.BloomsStore = (function () {
     isDeliveryUnlocked,
     dateForWeekSlot,
     dateKey,
+    dateKeyInIndia,
+    getMondayKeyInIndia,
+    addDaysToKey,
+    formatDateKey,
+    shortDateKey,
+    stampWeekDates,
     formatDate,
     getMonday,
     getCoupleCode,

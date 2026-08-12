@@ -529,9 +529,9 @@
       <p class="brand">The Blooms</p>
       <p class="eyebrow">Your side</p>
       <h1>Prepare this week</h1>
-      <p class="lede">
+      <p class="lede" id="week-range-lede">
         Make 14 soft deliveries — a bouquet + note or letter for each morning (before 10:00) and
-        night (11:00 PM).
+        night (11:00 PM). Dates sync to his side in India time.
       </p>
 
       <div class="pair-box" id="pair-box">
@@ -630,7 +630,7 @@
 
     <div class="toast" id="toast">Saved</div>
 
-    <script src="./public/js/blooms-store.js"></script>
+    <script src="./public/js/blooms-store.js?v=20260812c"></script>
     <script>
       const STORAGE_KEY = "blooms:her-week-v2"
       const MIN_FLOWERS = 4
@@ -675,7 +675,7 @@
             })
           })
         })
-        return slots
+        return BloomsStore.stampWeekDates(slots)
       }
 
       function normalizeFlowers(list) {
@@ -727,24 +727,34 @@
           if (!raw) return makeEmptyWeek()
           const parsed = JSON.parse(raw)
           if (!Array.isArray(parsed) || parsed.length !== 14) return makeEmptyWeek()
-          return parsed.map((slot) => ({
+          const normalized = parsed.map((slot) => ({
             ...slot,
             flowers: normalizeFlowers(slot.flowers),
           }))
+          // Always refresh calendar dates for this IST week so all letters stay aligned
+          return BloomsStore.stampWeekDates(normalized)
         } catch {
           return makeEmptyWeek()
         }
       }
 
-      function saveWeek(week) {
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(week))
-        // Push every ready delivery into his dated inbox
-        if (window.BloomsStore) BloomsStore.syncWeekToInbox(week)
+      function saveWeek(weekData) {
+        const stamped = BloomsStore.stampWeekDates(weekData)
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(stamped))
+        BloomsStore.syncWeekToInbox(stamped)
+        return stamped
       }
 
       let week = loadWeek()
       let editingId = null
       let draft = null
+
+      function updateWeekRangeCopy() {
+        const monday = week[0]?.dateKey || BloomsStore.getMondayKeyInIndia()
+        const sunday = BloomsStore.addDaysToKey(monday, 6)
+        document.getElementById("week-range-lede").textContent =
+          `Week of ${BloomsStore.shortDateKey(monday)} – ${BloomsStore.shortDateKey(sunday)} (India time). Make 14 deliveries — morning before 10:00 and night at 11:00 PM.`
+      }
 
       function showScreen(id) {
         document.querySelectorAll(".screen").forEach((el) => el.classList.remove("is-active"))
@@ -764,6 +774,7 @@
       }
 
       function renderHome() {
+        updateWeekRangeCopy()
         const done = doneCount()
         document.getElementById("progress-text").textContent = `${done} of 14 ready`
         document.getElementById("progress-fill").style.width = `${(done / 14) * 100}%`
@@ -772,9 +783,12 @@
         list.innerHTML = DAY_NAMES.map((day, dayIndex) => {
           const morning = week.find((s) => s.dayIndex === dayIndex && s.part === "morning")
           const night = week.find((s) => s.dayIndex === dayIndex && s.part === "night")
+          const dayDate = morning?.dateKey
+            ? BloomsStore.shortDateKey(morning.dateKey)
+            : BloomsStore.shortDateKey(BloomsStore.addDaysToKey(BloomsStore.getMondayKeyInIndia(), dayIndex))
           return `
             <div class="day-block">
-              <p class="day-name">${day}</p>
+              <p class="day-name">${day} · ${dayDate}</p>
               <div class="slot-row">
                 ${slotButton(morning)}
                 ${slotButton(night)}
@@ -789,10 +803,7 @@
 
       function slotButton(slot) {
         const when = slot.part === "morning" ? "Morning · before 10" : "Night · 11:00 PM"
-        const dateHint =
-          window.BloomsStore
-            ? BloomsStore.formatDate(BloomsStore.dateForWeekSlot(slot.dayIndex))
-            : ""
+        const dateHint = slot.dateLabel || (slot.dateKey ? BloomsStore.formatDateKey(slot.dateKey) : "")
         const state = slot.done ? "Ready" : "Tap to create"
         const hint = slot.done
           ? `${dateHint} · ${slot.flowers.length} flowers · ${slot.kind === "letter" ? "letter" : "note"}`
@@ -993,8 +1004,8 @@
           text: draft.text,
           done: true,
         }
-        saveWeek(week)
-        if (window.BloomsStore) BloomsStore.saveFromHerSlot(week[idx])
+        week = saveWeek(week)
+        BloomsStore.saveFromHerSlot(week[idx])
         renderHome()
         toast("Saved for him")
         showScreen("home")
@@ -1068,7 +1079,7 @@
         }
         try {
           await BloomsStore.pairCouple(code, { role: "her" })
-          BloomsStore.syncWeekToInbox(week)
+          week = saveWeek(week)
           toast("Couple code saved")
           refreshPairUI()
         } catch (err) {
@@ -1086,10 +1097,10 @@
         toast("New code ready — tap Save")
       })
 
+      // Stamp dates + push every ready letter to his dated inbox
+      week = saveWeek(week)
       renderHome()
       refreshPairUI()
-      // Keep his inbox in sync with anything already saved
-      if (window.BloomsStore) BloomsStore.syncWeekToInbox(week)
     </script>
   </body>
 </html>
