@@ -439,10 +439,20 @@ window.BloomsStore = (function () {
 
   function notificationPermission() {
     try {
-      return Notification.permission
+      if (typeof Notification === "undefined") return "unsupported"
+      return Notification.permission || "default"
     } catch {
       return "unsupported"
     }
+  }
+
+  function pushSupported() {
+    return (
+      typeof window !== "undefined" &&
+      "serviceWorker" in navigator &&
+      "PushManager" in window &&
+      typeof Notification !== "undefined"
+    )
   }
 
   return {
