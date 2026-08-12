@@ -751,10 +751,11 @@
 
     <div class="toast" id="toast">Saved</div>
 
-    <script src="./public/js/blooms-store.js?v=20260812f"></script>
+    <script src="./public/js/blooms-store.js?v=20260812g"></script>
     <script>
       const LEGACY_STORAGE_KEY = "blooms:her-week-v2"
       const OFFSET_KEY = "blooms:plan-week-offset"
+      const OFFSET_MIGRATED = "blooms:plan-week-offset-this-week"
       const MIN_FLOWERS = 4
       const MAX_FLOWERS = 12
       const FLOWER_BASE = "https://assets.pauwee.com/color/flowers"
@@ -779,8 +780,12 @@
       let flowerUid = 1
       let selectedBloomId = null
       let topZ = 10
-      // Default to next week so she prepares ahead; dates sync for that week
-      let weekOffset = Number(localStorage.getItem(OFFSET_KEY) ?? 1) === 0 ? 0 : 1
+      // Once: move everyone back to this week (so Aug 12–16 show instead of next week from 17)
+      if (!localStorage.getItem(OFFSET_MIGRATED)) {
+        localStorage.setItem(OFFSET_KEY, "0")
+        localStorage.setItem(OFFSET_MIGRATED, "1")
+      }
+      let weekOffset = Number(localStorage.getItem(OFFSET_KEY) ?? 0) === 1 ? 1 : 0
 
       function mondayKeyForOffset(offset = weekOffset) {
         return BloomsStore.planningMondayKey(offset)
@@ -895,6 +900,35 @@
         return stamped
       }
 
+      /** Pull his inbox / MongoDB deliveries back onto matching date slots (recovers Aug 12 etc.). */
+      async function restoreLettersFromServer(weekData) {
+        if (!BloomsStore.getCoupleCode()) return weekData
+        try {
+          const inbox = await BloomsStore.pullInbox()
+          if (!Array.isArray(inbox) || !inbox.length) return weekData
+          const byId = new Map(inbox.map((d) => [`${d.dateKey}-${d.part}`, d]))
+          let restored = 0
+          const merged = weekData.map((slot) => {
+            const d = byId.get(`${slot.dateKey}-${slot.part}`)
+            if (!d || !d.text) return slot
+            // Keep newer local edits if both exist and local is done with text
+            if (slot.done && slot.text && slot.text.trim()) return slot
+            restored += 1
+            return {
+              ...slot,
+              flowers: normalizeFlowers(d.flowers),
+              kind: d.kind || slot.kind,
+              text: d.text || "",
+              done: true,
+            }
+          })
+          if (restored > 0) toast(`Restored ${restored} saved letter${restored === 1 ? "" : "s"}`)
+          return merged
+        } catch {
+          return weekData
+        }
+      }
+
       function setWeekOffset(nextOffset) {
         const offset = Number(nextOffset) === 0 ? 0 : 1
         if (offset === weekOffset) return
@@ -902,9 +936,11 @@
         weekOffset = offset
         localStorage.setItem(OFFSET_KEY, String(weekOffset))
         week = loadWeek(weekOffset)
-        week = saveWeek(week, weekOffset)
-        renderHome()
-        toast(weekOffset === 1 ? "Planning next week — dates synced" : "Planning this week — dates synced")
+        restoreLettersFromServer(week).then((merged) => {
+          week = saveWeek(merged, weekOffset)
+          renderHome()
+        })
+        toast(weekOffset === 1 ? "Planning next week — dates synced" : "Planning this week — dates from today")
       }
 
       let week = loadWeek(weekOffset)
@@ -914,11 +950,14 @@
       function updateWeekRangeCopy() {
         const monday = week[0]?.dateKey || mondayKeyForOffset(weekOffset)
         const sunday = BloomsStore.addDaysToKey(monday, 6)
+        const todayKey = BloomsStore.getTodayKey()
         const label = weekOffset === 1 ? "Next week" : "This week"
         document.getElementById("week-title").textContent =
           weekOffset === 1 ? "Prepare next week" : "Prepare this week"
         document.getElementById("week-range-lede").textContent =
-          `${label}: ${BloomsStore.shortDateKey(monday)} – ${BloomsStore.shortDateKey(sunday)} (India time). Save once and every letter syncs to him on that date.`
+          weekOffset === 0
+            ? `${label}: ${BloomsStore.shortDateKey(monday)} – ${BloomsStore.shortDateKey(sunday)}. Write from ${BloomsStore.shortDateKey(todayKey)} onward — open Wednesday for your 12 letter if it’s there.`
+            : `${label}: ${BloomsStore.shortDateKey(monday)} – ${BloomsStore.shortDateKey(sunday)} (India time).`
         document.querySelectorAll("#week-offset-toggle [data-week-offset]").forEach((btn) => {
           btn.classList.toggle("is-on", Number(btn.getAttribute("data-week-offset")) === weekOffset)
         })
@@ -1086,14 +1125,18 @@
       }
 
       function slotButton(slot) {
+        const todayKey = BloomsStore.getTodayKey()
+        const isPast = slot.dateKey && slot.dateKey < todayKey
         const when = slot.part === "morning" ? "Morning · before 10" : "Night · 11:00 PM"
         const dateHint = slot.dateLabel || (slot.dateKey ? BloomsStore.formatDateKey(slot.dateKey) : "")
-        const state = slot.done ? "Ready" : "Tap to create"
+        const state = slot.done ? "Ready" : isPast ? "Past · tap to edit" : "Tap to create"
         const hint = slot.done
           ? `${dateHint} · ${slot.flowers.length} flowers · ${slot.kind === "letter" ? "letter" : "note"}`
           : dateHint || "Bouquet + words"
         return `
-          <button type="button" class="slot-card ${slot.done ? "is-done" : ""}" data-edit="${slot.id}">
+          <button type="button" class="slot-card ${slot.done ? "is-done" : ""}" data-edit="${slot.id}" ${
+            isPast && !slot.done ? 'style="opacity:.72"' : ""
+          }>
             <span class="when">${when}</span>
             <span class="state">${state}</span>
             <span class="hint">${hint}</span>
@@ -1411,10 +1454,21 @@
         }
       })
 
-      // Stamp next/this week dates + push every ready letter to his dated inbox
-      week = saveWeek(week, weekOffset)
-      renderHome()
-      refreshPairUI()
+      // This week by default (13 onward), restore any letters already synced (incl. 12)
+      ;(async () => {
+        week = saveWeek(week, weekOffset)
+        week = await restoreLettersFromServer(week)
+        week = saveWeek(week, weekOffset)
+        renderHome()
+        refreshPairUI()
+        // Scroll toward today / tomorrow so writing starts near the 13th
+        const todayKey = BloomsStore.getTodayKey()
+        const focus = week.find((s) => s.dateKey >= todayKey) || week.find((s) => s.dateKey === todayKey)
+        if (focus) {
+          const btn = document.querySelector(`[data-edit="${focus.id}"]`)
+          btn?.scrollIntoView({ block: "center", behavior: "smooth" })
+        }
+      })()
     </script>
   </body>
 </html>
