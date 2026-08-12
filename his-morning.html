@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-    <meta name="theme-color" content="#1e4a37" />
+    <meta name="theme-color" content="#d8ebe0" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="default" />
     <meta name="apple-mobile-web-app-title" content="The Blooms" />
@@ -779,9 +779,8 @@
         document.getElementById(id).classList.add("is-active")
         window.scrollTo({ top: 0, behavior: "smooth" })
 
-        // Night colors only while reading a night delivery — home stays soft dawn always
-        const nightMode = id === "bouquet" && activeDelivery?.part === "night"
-        document.body.classList.toggle("is-night-theme", nightMode)
+        // Keep soft dawn colors everywhere — never flip home/bouquet to night green
+        document.body.classList.remove("is-night-theme")
       }
 
       function renderBouquet(flowers) {
@@ -1156,6 +1155,7 @@
           BloomsStore.setCoupleCode(code)
           BloomsStore.trackAppOpen()
           document.getElementById("pair").classList.remove("is-active")
+          document.body.classList.remove("is-night-theme")
           document.getElementById("home").classList.add("is-active")
           document.getElementById("home-couple-code").textContent = "Paired"
           await BloomsStore.pullInbox()
@@ -1163,6 +1163,7 @@
           renderInstallSteps()
           // Permission must come from a tap — show the Allow button instead of auto-prompting
           refreshNotifyCard()
+          showScreen("home")
         } catch (err) {
           status.textContent = err.message || "Wrong couple code. Try again."
         }

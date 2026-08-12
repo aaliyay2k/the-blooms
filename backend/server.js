@@ -345,6 +345,7 @@ async function start() {
   }
 
   app.listen(PORT, () => {
+    // Redeploy bump — static pages (his-morning.html) ship with this process
     console.log(`The Blooms running on http://localhost:${PORT}`)
     console.log(`His side:     http://localhost:${PORT}/`)
     console.log(`Your side:    http://localhost:${PORT}/the-blooms.html`)
