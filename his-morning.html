@@ -374,15 +374,17 @@
         color: #d8e8de;
       }
 
-      /* ——— Bouquet ——— */
+      /* ——— Bouquet + words (one scroll) ——— */
       #bouquet {
-        justify-content: space-between;
+        justify-content: flex-start;
         gap: 0.75rem;
         max-width: none;
         width: 100%;
         background: linear-gradient(180deg, #dff3ea 0%, #eef6ef 38%, #f7ebe0 72%, #f4d9cb 100%);
         padding-left: max(1.25rem, env(safe-area-inset-left));
         padding-right: max(1.25rem, env(safe-area-inset-right));
+        overflow-y: auto;
+        -webkit-overflow-scrolling: touch;
       }
 
       body.is-night-theme #bouquet {
@@ -414,13 +416,14 @@
       }
 
       .bouquet-stage {
-        flex: 1;
+        flex: 0 0 auto;
         display: flex;
         flex-direction: column;
         align-items: center;
         justify-content: center;
         text-align: center;
         gap: 0.9rem;
+        min-height: min(72vh, 580px);
       }
 
       .bouquet-art {
@@ -514,10 +517,26 @@
         color: #b7cfc2;
       }
 
-      /* ——— Message ——— */
-      #message {
-        justify-content: center;
-        gap: 1rem;
+      .scroll-hint {
+        margin: 0.25rem 0 0;
+        font-size: 0.78rem;
+        font-weight: 600;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        color: var(--leaf);
+        opacity: 0.85;
+      }
+
+      body.is-night-theme .scroll-hint {
+        color: #b7cfc2;
+      }
+
+      .delivery-words {
+        width: min(440px, 100%);
+        margin: 0.35rem auto 1.5rem;
+        display: grid;
+        gap: 0.85rem;
+        padding-bottom: 1rem;
       }
 
       .message-shell {
@@ -544,6 +563,11 @@
         padding: 1.25rem 1.15rem;
         transform: rotate(-1.1deg);
         background: #fff7e8;
+      }
+
+      .message-shell[data-kind="voice"] {
+        background: #f3faf5;
+        transform: none;
       }
 
       .message-kind {
@@ -708,7 +732,7 @@
       <ul class="past-list" id="past-list"></ul>
     </section>
 
-    <section id="bouquet" class="screen" aria-label="Digital bouquet">
+    <section id="bouquet" class="screen" aria-label="Bouquet and her words">
       <div class="top-meta">
         <button type="button" class="back-link" data-go="home">← Home</button>
         <p class="time-chip" id="bouquet-when">Morning</p>
@@ -721,29 +745,24 @@
         <p class="time-chip" id="bouquet-date" style="margin: 0"></p>
         <h2 class="bouquet-title" id="bouquet-title">A bouquet for your morning.</h2>
         <p class="flower-names">Hand-picked · just for you</p>
-        <button class="btn btn-primary" type="button" id="read-words">Read what she wrote</button>
+        <p class="scroll-hint" id="scroll-hint">Scroll down for her words ↓</p>
       </div>
-    </section>
 
-    <section id="message" class="screen" aria-label="Her message">
-      <div class="top-meta">
-        <button type="button" class="back-link" id="message-back">← Bouquet</button>
+      <div class="delivery-words" id="delivery-words">
         <p class="time-chip" id="kind-label">Love letter</p>
-      </div>
-
-      <article class="message-shell" id="message-shell" data-kind="letter">
-        <p class="message-kind" id="message-kind">Love letter</p>
-        <p class="message-body" id="message-body"></p>
-        <audio id="message-audio" controls playsinline style="display:none;width:100%;margin-top:1rem"></audio>
-        <p class="message-sign">— with love</p>
-      </article>
-
-      <div class="actions">
-        <button class="btn btn-primary" type="button" data-go="home">Keep this one</button>
+        <article class="message-shell" id="message-shell" data-kind="letter">
+          <p class="message-kind" id="message-kind">Love letter</p>
+          <p class="message-body" id="message-body"></p>
+          <audio id="message-audio" controls playsinline style="display:none;width:100%;margin-top:1rem"></audio>
+          <p class="message-sign">— with love</p>
+        </article>
+        <div class="actions">
+          <button class="btn btn-primary" type="button" data-go="home">Keep this one</button>
+        </div>
       </div>
     </section>
 
-    <script src="./public/js/blooms-store.js?v=20260812h"></script>
+    <script src="./public/js/blooms-store.js?v=20260812k"></script>
     <script>
       const FLOWER_BASE = "https://assets.pauwee.com/color/flowers"
       let activeDelivery = null
@@ -760,8 +779,7 @@
         document.getElementById(id).classList.add("is-active")
         window.scrollTo({ top: 0, behavior: "smooth" })
 
-        const nightMode =
-          (id === "bouquet" || id === "message") && activeDelivery?.part === "night"
+        const nightMode = id === "bouquet" && activeDelivery?.part === "night"
         document.body.classList.toggle(
           "is-night-theme",
           nightMode || (id === "home" && new Date().getHours() >= 23),
@@ -911,6 +929,41 @@
         refreshNotifyCard()
       }
 
+      function fillDeliveryWords(delivery) {
+        const kind = delivery.kind || (delivery.voiceData ? "voice" : "note")
+        const kindLabel =
+          delivery.kindLabel ||
+          (kind === "letter" ? "Love letter" : kind === "voice" ? "Voice note" : "Small note")
+        const shell = document.getElementById("message-shell")
+        const audio = document.getElementById("message-audio")
+        const hint = document.getElementById("scroll-hint")
+
+        shell.dataset.kind = kind
+        document.getElementById("message-kind").textContent = kindLabel
+        document.getElementById("kind-label").textContent = kindLabel
+
+        if (kind === "voice") {
+          document.getElementById("message-body").textContent =
+            delivery.text && delivery.text !== "A voice note for you."
+              ? delivery.text
+              : "A voice note for you."
+          hint.textContent = "Scroll down for her voice note ↓"
+          if (delivery.voiceData) {
+            audio.style.display = "block"
+            audio.src = delivery.voiceData
+          } else {
+            audio.style.display = "none"
+            audio.removeAttribute("src")
+          }
+        } else {
+          document.getElementById("message-body").textContent = delivery.text || ""
+          hint.textContent =
+            kind === "letter" ? "Scroll down for her letter ↓" : "Scroll down for her note ↓"
+          audio.style.display = "none"
+          audio.removeAttribute("src")
+        }
+      }
+
       function openDelivery(delivery, { ignoreSchedule = false } = {}) {
         if (!delivery) return
 
@@ -934,10 +987,14 @@
         document.getElementById("bouquet-when").textContent = delivery.whenLabel
         document.getElementById("bouquet-date").textContent = delivery.dateLabel
         document.getElementById("bouquet-title").textContent = delivery.title
-        document.getElementById("read-words").textContent =
-          delivery.kind === "voice" ? "Play her voice note" : "Read what she wrote"
         renderBouquet(delivery.flowers)
+        fillDeliveryWords(delivery)
+        BloomsStore.markOpened(delivery.id)
+        BloomsStore.trackMessageRead(delivery)
+        refreshHome()
         showScreen("bouquet")
+        const screen = document.getElementById("bouquet")
+        if (screen) screen.scrollTop = 0
       }
 
       function openToday(part) {
@@ -950,30 +1007,6 @@
           return
         }
         openDelivery(d)
-      }
-
-      function openMessage() {
-        if (!activeDelivery) return
-        const shell = document.getElementById("message-shell")
-        const audio = document.getElementById("message-audio")
-        shell.dataset.kind = activeDelivery.kind
-        document.getElementById("message-kind").textContent = activeDelivery.kindLabel
-        document.getElementById("kind-label").textContent = activeDelivery.kindLabel
-        document.getElementById("message-body").textContent =
-          activeDelivery.kind === "voice"
-            ? activeDelivery.text || "A voice note for you."
-            : activeDelivery.text
-        if (activeDelivery.voiceData) {
-          audio.style.display = "block"
-          audio.src = activeDelivery.voiceData
-        } else {
-          audio.style.display = "none"
-          audio.removeAttribute("src")
-        }
-        BloomsStore.markOpened(activeDelivery.id)
-        BloomsStore.trackMessageRead(activeDelivery)
-        refreshHome()
-        showScreen("message")
       }
 
       function renderPast() {
@@ -1045,8 +1078,6 @@
 
       document.getElementById("slot-morning").addEventListener("click", () => openToday("morning"))
       document.getElementById("slot-night").addEventListener("click", () => openToday("night"))
-      document.getElementById("read-words").addEventListener("click", openMessage)
-      document.getElementById("message-back").addEventListener("click", () => showScreen("bouquet"))
 
       function wipeSavedCoupleCode() {
         try {
@@ -1139,22 +1170,16 @@
         }
       })
 
-      document.getElementById("enable-notify-btn").addEventListener("click", async () => {
-        const meta = document.getElementById("notify-meta")
-        const btn = document.getElementById("enable-notify-btn")
-        btn.disabled = true
-        meta.textContent = "Asking your phone…"
-        try {
-          await BloomsStore.enablePushNotifications("him")
-          meta.textContent = "Notifications on — you’ll get morning & night reminders."
-          refreshNotifyCard()
-        } catch (err) {
-          meta.textContent = err.message || "Couldn’t enable notifications."
-          refreshNotifyCard()
-        } finally {
-          btn.disabled = BloomsStore.notificationPermission() === "unsupported"
-        }
+      document.getElementById("enable-notify-btn").addEventListener("click", () => {
+        requestHisNotifications()
       })
+
+      const installNotifyBtn = document.getElementById("install-enable-notify")
+      if (installNotifyBtn) {
+        installNotifyBtn.addEventListener("click", () => {
+          requestHisNotifications()
+        })
+      }
 
       boot()
     </script>
