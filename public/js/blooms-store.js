@@ -5,6 +5,7 @@ window.BloomsStore = (function () {
   const WEEK_KEY = "blooms:her-week-v2"
   const COUPLE_KEY = "blooms:couple-code"
   const API_KEY = "blooms:api-url"
+  const PUSH_OK_KEY = "blooms:push-subscribed"
 
   // Local API while developing. Change later when you deploy.
   const DEFAULT_API = "http://localhost:8787"
@@ -394,6 +395,33 @@ window.BloomsStore = (function () {
     return output
   }
 
+  function markPushSubscribed(role = "him") {
+    localStorage.setItem(`${PUSH_OK_KEY}:${role}`, "1")
+  }
+
+  function clearPushSubscribed(role = "him") {
+    localStorage.removeItem(`${PUSH_OK_KEY}:${role}`)
+  }
+
+  function wasPushSubscribed(role = "him") {
+    return localStorage.getItem(`${PUSH_OK_KEY}:${role}`) === "1"
+  }
+
+  /** True only when permission + device subscription + server save succeeded. */
+  async function isPushReady(role = "him") {
+    if (!pushSupported()) return false
+    if (notificationPermission() !== "granted") return false
+    if (!wasPushSubscribed(role)) return false
+    try {
+      const reg = await navigator.serviceWorker.getRegistration()
+      if (!reg?.pushManager) return false
+      const sub = await reg.pushManager.getSubscription()
+      return Boolean(sub?.endpoint)
+    } catch {
+      return false
+    }
+  }
+
   /** Must be called from a user tap so mobile browsers show Allow. */
   async function enablePushNotifications(role = "him") {
     if (!("serviceWorker" in navigator) || !("PushManager" in window)) {
@@ -414,6 +442,7 @@ window.BloomsStore = (function () {
       permission = await Notification.requestPermission()
     }
     if (permission !== "granted") {
+      clearPushSubscribed(role)
       throw new Error("Notification permission was not allowed.")
     }
 
@@ -433,8 +462,21 @@ window.BloomsStore = (function () {
       method: "POST",
       body: JSON.stringify({ subscription, role }),
     })
+    markPushSubscribed(role)
 
     return { ok: true, permission }
+  }
+
+  async function sendTestPush(role = "him") {
+    const code = getCoupleCode()
+    if (!code) throw new Error("Enter the couple code first.")
+    if (!(await isPushReady(role))) {
+      await enablePushNotifications(role)
+    }
+    return api(`/api/couple/${encodeURIComponent(code)}/push-test`, {
+      method: "POST",
+      body: JSON.stringify({ role }),
+    })
   }
 
   function notificationPermission() {
@@ -489,6 +531,9 @@ window.BloomsStore = (function () {
     trackMessageRead,
     fetchActivity,
     enablePushNotifications,
+    sendTestPush,
+    isPushReady,
+    wasPushSubscribed,
     notificationPermission,
     pushSupported,
     read,

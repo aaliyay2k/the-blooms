@@ -668,6 +668,9 @@
         <button type="button" class="btn btn-primary" id="enable-notify-btn" style="margin-top:0.55rem;width:100%">
           Allow notifications
         </button>
+        <button type="button" class="btn btn-ghost" id="test-notify-btn" style="margin-top:0.45rem;width:100%;display:none">
+          Send test notification
+        </button>
       </div>
 
       <div class="slot-list">
@@ -803,41 +806,49 @@
         })
       }
 
-      function refreshNotifyCard() {
+      async function refreshNotifyCard() {
         const card = document.getElementById("notify-card")
         const meta = document.getElementById("notify-meta")
         const btn = document.getElementById("enable-notify-btn")
+        const testBtn = document.getElementById("test-notify-btn")
         const installStatus = document.getElementById("install-notify-status")
         if (!card || !meta || !btn) return
 
         const permission = BloomsStore.notificationPermission()
         const canPush = BloomsStore.pushSupported()
+        const ready = canPush ? await BloomsStore.isPushReady("him") : false
 
-        // Always keep the card visible until notifications are clearly on
         card.style.display = "grid"
+        if (testBtn) testBtn.style.display = ready ? "block" : "none"
 
-        if (permission === "granted" && canPush) {
-          meta.textContent = "Notifications are on for morning (10:00) and night (11:00)."
-          btn.textContent = "Notifications enabled"
+        if (ready) {
+          meta.textContent =
+            "Linked to this phone. Tap Send test notification to check — morning (10:00) and night (11:00) alerts follow."
+          btn.textContent = "Notifications linked"
           btn.disabled = true
-          if (installStatus) installStatus.textContent = "Notifications enabled."
+          if (installStatus) installStatus.textContent = "Notifications linked."
           return
         }
 
         btn.disabled = false
         if (!canPush) {
           meta.textContent =
-            "On iPhone: Safari → Share → Add to Home Screen, then open The Blooms from the Home Screen icon and tap Allow. In a normal Safari tab, iPhone blocks notification prompts."
-          btn.textContent = "Allow notifications"
+            "Notifications are not available in a normal Safari tab. Add to Home Screen, open from that icon, then tap Allow."
+          btn.textContent = "How to enable"
           if (installStatus) {
             installStatus.textContent =
               "Add to Home Screen first, open from the icon, then tap Allow notifications."
           }
         } else if (permission === "denied") {
           meta.textContent =
-            "Notifications were blocked earlier. In phone settings → site settings → allow notifications for the-blooms.onrender.com, then tap again."
+            "Notifications were blocked earlier. In phone settings → allow notifications for the-blooms.onrender.com, then tap again."
           btn.textContent = "Try notifications again"
           if (installStatus) installStatus.textContent = "Permission blocked — allow in phone settings, then retry."
+        } else if (permission === "granted") {
+          meta.textContent =
+            "Permission is on, but this phone is not linked yet. Tap below once to finish setup."
+          btn.textContent = "Finish notification setup"
+          if (installStatus) installStatus.textContent = "Tap to finish linking this phone."
         } else {
           meta.textContent =
             "Tap Allow — your phone will ask for permission for morning & night blooms."
@@ -854,31 +865,62 @@
         if (meta) meta.textContent = "Asking your phone…"
         if (installStatus) installStatus.textContent = "Asking your phone…"
         try {
+          if (!BloomsStore.pushSupported() && /iPhone|iPad|iPod/i.test(navigator.userAgent)) {
+            const standalone =
+              window.matchMedia("(display-mode: standalone)").matches ||
+              window.navigator.standalone === true
+            if (!standalone) {
+              showScreen("install")
+              renderInstallSteps()
+              if (installStatus) {
+                installStatus.textContent =
+                  "Add to Home Screen, open from the icon, then tap Allow notifications."
+              }
+              return false
+            }
+          }
           if (!BloomsStore.getCoupleCode()) {
             throw new Error("Enter the couple code first, then allow notifications.")
           }
-          // iOS only supports push from the installed Home Screen app
-          const standalone =
-            window.matchMedia("(display-mode: standalone)").matches ||
-            window.navigator.standalone === true
-          if (!BloomsStore.pushSupported() && /iPhone|iPad|iPod/i.test(navigator.userAgent) && !standalone) {
-            throw new Error(
-              "On iPhone, add The Blooms to Home Screen, open it from that icon, then tap Allow.",
-            )
-          }
           await BloomsStore.enablePushNotifications("him")
-          if (meta) meta.textContent = "Notifications on — you’ll get morning & night reminders."
-          if (installStatus) installStatus.textContent = "Notifications on."
-          refreshNotifyCard()
+          if (meta) meta.textContent = "Linked — sending a test notification…"
+          try {
+            await BloomsStore.sendTestPush("him")
+            if (meta) meta.textContent = "Test sent. If you got it, morning & night alerts will work."
+            if (installStatus) installStatus.textContent = "Test notification sent."
+          } catch (testErr) {
+            if (meta) {
+              meta.textContent =
+                "Linked, but test failed: " + (testErr.message || "try Send test notification.")
+            }
+          }
+          await refreshNotifyCard()
           return true
         } catch (err) {
           const msg = err.message || "Couldn’t enable notifications."
           if (meta) meta.textContent = msg
           if (installStatus) installStatus.textContent = msg
-          refreshNotifyCard()
+          await refreshNotifyCard()
+          if (meta && msg) meta.textContent = msg
           return false
         } finally {
-          if (btn) btn.disabled = BloomsStore.notificationPermission() === "granted"
+          const ready = await BloomsStore.isPushReady("him")
+          if (btn) btn.disabled = ready
+        }
+      }
+
+      async function sendHisTestNotification() {
+        const meta = document.getElementById("notify-meta")
+        const testBtn = document.getElementById("test-notify-btn")
+        if (testBtn) testBtn.disabled = true
+        if (meta) meta.textContent = "Sending test…"
+        try {
+          await BloomsStore.sendTestPush("him")
+          if (meta) meta.textContent = "Test sent — check your notification shade."
+        } catch (err) {
+          if (meta) meta.textContent = err.message || "Test failed."
+        } finally {
+          if (testBtn) testBtn.disabled = false
         }
       }
 
@@ -1170,8 +1212,25 @@
       })
 
       document.getElementById("enable-notify-btn").addEventListener("click", () => {
+        if (!BloomsStore.pushSupported() && /iPhone|iPad|iPod/i.test(navigator.userAgent)) {
+          const standalone =
+            window.matchMedia("(display-mode: standalone)").matches ||
+            window.navigator.standalone === true
+          if (!standalone) {
+            showScreen("install")
+            renderInstallSteps()
+            return
+          }
+        }
         requestHisNotifications()
       })
+
+      const testNotifyBtn = document.getElementById("test-notify-btn")
+      if (testNotifyBtn) {
+        testNotifyBtn.addEventListener("click", () => {
+          sendHisTestNotification()
+        })
+      }
 
       const installNotifyBtn = document.getElementById("install-enable-notify")
       if (installNotifyBtn) {

@@ -4,7 +4,7 @@ import express from "express"
 import path from "path"
 import { fileURLToPath } from "url"
 import { connectDb, findCouple, getOrCreateCouple, isDbReady, sortDeliveries } from "./db.js"
-import { notifyPart, notifyHerWriteReminders, pushEnabled, startNotificationScheduler } from "./notify.js"
+import { notifyPart, notifyHerWriteReminders, pushEnabled, startNotificationScheduler, sendTestPush } from "./notify.js"
 
 dotenv.config()
 
@@ -74,6 +74,16 @@ app.post(
   }),
 )
 
+app.post(
+  "/api/couple/:code/push-test",
+  requireDb,
+  asyncHandler(async (req, res) => {
+    const role = String(req.body?.role || "him").toLowerCase() === "her" ? "her" : "him"
+    const result = await sendTestPush(req.params.code, role)
+    res.json(result)
+  }),
+)
+
 /** External cron can hit this (Render free sleep workaround) */
 app.post(
   "/api/cron/notify",
@@ -93,6 +103,27 @@ app.post(
     }
     const result = await notifyPart(part)
     res.json(result)
+  }),
+)
+
+/** GET variant for easy cron-job.org / EasyCron setup */
+app.get(
+  "/api/cron/notify",
+  asyncHandler(async (req, res) => {
+    const secret = req.query.secret || req.get("x-cron-secret")
+    if (CRON_SECRET && secret !== CRON_SECRET) {
+      return res.status(401).json({ error: "Unauthorized" })
+    }
+    const part = req.query.part
+    if (part === "her-reminder") {
+      return res.json(await notifyHerWriteReminders())
+    }
+    if (part !== "morning" && part !== "night") {
+      return res.status(400).json({
+        error: 'part must be "morning", "night", or "her-reminder"',
+      })
+    }
+    res.json(await notifyPart(part))
   }),
 )
 

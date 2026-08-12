@@ -1,6 +1,6 @@
 import cron from "node-cron"
 import webpush from "web-push"
-import { Couple, isDbReady, sortDeliveries } from "./db.js"
+import { Couple, findCouple, isDbReady, sortDeliveries } from "./db.js"
 
 function configureWebPush() {
   const publicKey = process.env.VAPID_PUBLIC_KEY
@@ -185,4 +185,36 @@ export function startNotificationScheduler() {
   console.log(
     "Notification schedule ready: him 10:00 & 23:00; her reminders 12:00 & 19:00 Asia/Kolkata",
   )
+}
+
+/** Immediate test push to one couple (him or her devices). */
+export async function sendTestPush(code, role = "him") {
+  if (!isDbReady()) throw Object.assign(new Error("Database not ready"), { status: 503 })
+  if (!pushEnabled) throw Object.assign(new Error("Push not configured"), { status: 503 })
+
+  const couple = await findCouple(code)
+
+  const who = role === "her" ? "her" : "him"
+  const result = await sendToRole(couple, who, {
+    title: "The Blooms — test",
+    body:
+      who === "her"
+        ? "Reminders are working. You’ll get a ping when notes are still left."
+        : "Alerts are working. You’ll get morning (10:00) and night (11:00) pings.",
+    url: who === "her" ? "/the-blooms.html" : "/",
+    part: "test",
+  })
+
+  if (result.sent === 0) {
+    throw Object.assign(
+      new Error(
+        who === "him"
+          ? "No phone linked yet. On his phone: open from Home Screen, enter code, tap Allow notifications."
+          : "No phone linked yet. Tap Allow reminder notifications on your side first.",
+      ),
+      { status: 400 },
+    )
+  }
+
+  return { ok: true, role: who, ...result }
 }
