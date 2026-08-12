@@ -1,0 +1,23 @@
+services:
+  - type: web
+    name: the-blooms
+    runtime: node
+    rootDir: backend
+    buildCommand: npm install
+    startCommand: npm start
+    plan: free
+    envVars:
+      - key: MONGODB_URI
+        sync: false
+      - key: MONGODB_URI_STANDARD
+        sync: false
+      - key: VAPID_PUBLIC_KEY
+        sync: false
+      - key: VAPID_PRIVATE_KEY
+        sync: false
+      - key: VAPID_SUBJECT
+        value: mailto:theblooms@example.com
+      - key: CRON_SECRET
+        sync: false
+      - key: NODE_VERSION
+        value: "20"
