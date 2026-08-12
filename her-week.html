@@ -182,6 +182,85 @@
         transition: width 0.3s ease;
       }
 
+      .reminder-card,
+      .activity-card {
+        border: 1px solid rgba(30, 74, 55, 0.14);
+        background: rgba(255, 250, 244, 0.88);
+        border-radius: 16px;
+        padding: 0.95rem 1rem;
+        margin: 0 0 0.85rem;
+      }
+
+      .reminder-card.is-done {
+        border-color: rgba(30, 74, 55, 0.28);
+      }
+
+      .reminder-card h2,
+      .activity-card h2 {
+        margin: 0;
+        font-family: var(--font-display);
+        font-size: 1.25rem;
+        font-weight: 600;
+        letter-spacing: -0.02em;
+      }
+
+      .reminder-card p,
+      .activity-card p {
+        margin: 0.35rem 0 0;
+        color: var(--ink-soft);
+        font-size: 0.92rem;
+        line-height: 1.45;
+      }
+
+      .activity-stats {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 0.55rem;
+        margin-top: 0.75rem;
+      }
+
+      .activity-stat {
+        background: rgba(46, 106, 79, 0.08);
+        border-radius: 12px;
+        padding: 0.65rem 0.7rem;
+      }
+
+      .activity-stat strong {
+        display: block;
+        font-size: 1.2rem;
+        color: var(--leaf-deep);
+        line-height: 1.1;
+      }
+
+      .activity-stat span {
+        display: block;
+        margin-top: 0.2rem;
+        font-size: 0.72rem;
+        font-weight: 600;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+        color: var(--ink-soft);
+      }
+
+      .activity-list {
+        list-style: none;
+        margin: 0.7rem 0 0;
+        padding: 0;
+        display: grid;
+        gap: 0.4rem;
+      }
+
+      .activity-list li {
+        font-size: 0.86rem;
+        color: var(--ink-soft);
+        line-height: 1.35;
+      }
+
+      .activity-list strong {
+        color: var(--ink);
+        font-weight: 600;
+      }
+
       .day-block {
         margin-bottom: 0.85rem;
       }
@@ -556,6 +635,38 @@
       <p class="progress" id="progress-text">0 of 14 ready</p>
       <div class="progress-bar" aria-hidden="true"><span id="progress-fill"></span></div>
 
+      <div class="reminder-card" id="write-reminder">
+        <h2 id="reminder-title">Notes remaining</h2>
+        <p id="reminder-body">Likh na — finish the empty slots for this plan.</p>
+      </div>
+
+      <div class="activity-card" id="his-activity">
+        <h2>His opens &amp; reads</h2>
+        <p id="activity-summary">Save your couple code to see when he opens the link and reads your words.</p>
+        <div class="activity-stats" id="activity-stats" hidden>
+          <div class="activity-stat">
+            <strong id="stat-opens">0</strong>
+            <span>Link opens</span>
+          </div>
+          <div class="activity-stat">
+            <strong id="stat-current">0</strong>
+            <span>Today’s reads</span>
+          </div>
+          <div class="activity-stat">
+            <strong id="stat-past">0</strong>
+            <span>Past reads</span>
+          </div>
+          <div class="activity-stat">
+            <strong id="stat-total">0</strong>
+            <span>All reads</span>
+          </div>
+        </div>
+        <ul class="activity-list" id="activity-details"></ul>
+        <button type="button" class="btn btn-ghost" id="refresh-activity" style="margin-top: 0.75rem; width: 100%">
+          Refresh his activity
+        </button>
+      </div>
+
       <div id="week-list"></div>
 
       <div class="actions" style="margin-top: 1rem">
@@ -635,7 +746,7 @@
 
     <div class="toast" id="toast">Saved</div>
 
-    <script src="./public/js/blooms-store.js?v=20260812d"></script>
+    <script src="./public/js/blooms-store.js?v=20260812e"></script>
     <script>
       const LEGACY_STORAGE_KEY = "blooms:her-week-v2"
       const OFFSET_KEY = "blooms:plan-week-offset"
@@ -825,11 +936,123 @@
         return week.filter((s) => s.done).length
       }
 
+      function remainingCount() {
+        return week.filter((s) => !s.done).length
+      }
+
+      function renderWriteReminder() {
+        const left = remainingCount()
+        const card = document.getElementById("write-reminder")
+        const title = document.getElementById("reminder-title")
+        const body = document.getElementById("reminder-body")
+        const weekLabel = weekOffset === 1 ? "next week" : "this week"
+
+        if (left <= 0) {
+          card.classList.add("is-done")
+          title.textContent = "All notes ready"
+          body.textContent = `Sab likh diya for ${weekLabel} — 14/14 synced for him.`
+          return
+        }
+
+        card.classList.remove("is-done")
+        title.textContent =
+          left === 1 ? "1 note remaining to write" : `${left} notes remaining to write`
+        body.textContent =
+          left === 1
+            ? `Likh na — one last bouquet + note left for ${weekLabel}.`
+            : `Likh na — ${left} bouquet + note slots still empty for ${weekLabel}.`
+      }
+
+      function formatWhen(iso) {
+        if (!iso) return ""
+        try {
+          return new Date(iso).toLocaleString("en-IN", {
+            timeZone: "Asia/Kolkata",
+            day: "numeric",
+            month: "short",
+            hour: "numeric",
+            minute: "2-digit",
+          })
+        } catch {
+          return ""
+        }
+      }
+
+      async function renderHisActivity() {
+        const summary = document.getElementById("activity-summary")
+        const stats = document.getElementById("activity-stats")
+        const details = document.getElementById("activity-details")
+        const code = BloomsStore.getCoupleCode()
+
+        if (!code) {
+          stats.hidden = true
+          details.innerHTML = ""
+          summary.textContent =
+            "Save your couple code to see how many times he opened the link and read your messages."
+          return
+        }
+
+        try {
+          const data = await BloomsStore.fetchActivity()
+          stats.hidden = false
+          document.getElementById("stat-opens").textContent = String(data.appOpens || 0)
+          document.getElementById("stat-current").textContent = String(data.currentReadCount || 0)
+          document.getElementById("stat-past").textContent = String(data.pastReadCount || 0)
+          document.getElementById("stat-total").textContent = String(data.totalReads || 0)
+
+          const lastOpen = formatWhen(data.lastOpenAt)
+          summary.textContent = lastOpen
+            ? `He last opened the link ${lastOpen}.`
+            : "Waiting for him to open the link with your couple code."
+
+          const lines = []
+          const current = Array.isArray(data.currentReads) ? data.currentReads : []
+          const past = Array.isArray(data.pastReads) ? data.pastReads : []
+
+          if (current.length) {
+            current
+              .sort((a, b) => (b.count || 0) - (a.count || 0))
+              .forEach((r) => {
+                const label = r.whenLabel || r.part || "Today"
+                lines.push(
+                  `<li><strong>Today · ${label}</strong> — read ${r.count} time${r.count === 1 ? "" : "s"}${
+                    r.lastReadAt ? ` · last ${formatWhen(r.lastReadAt)}` : ""
+                  }</li>`,
+                )
+              })
+          } else {
+            lines.push(`<li>No reads on today’s messages yet.</li>`)
+          }
+
+          if (past.length) {
+            past
+              .sort((a, b) => String(b.lastReadAt || "").localeCompare(String(a.lastReadAt || "")))
+              .slice(0, 8)
+              .forEach((r) => {
+                const label = `${r.dateLabel || r.dateKey || "Past"} · ${r.whenLabel || r.part || ""}`.trim()
+                lines.push(
+                  `<li><strong>${label}</strong> — read ${r.count} time${r.count === 1 ? "" : "s"}</li>`,
+                )
+              })
+          }
+
+          details.innerHTML = lines.join("")
+        } catch (err) {
+          stats.hidden = true
+          details.innerHTML = ""
+          summary.textContent = err.message || "Couldn’t load his activity yet."
+        }
+      }
+
       function renderHome() {
         updateWeekRangeCopy()
         const done = doneCount()
-        document.getElementById("progress-text").textContent = `${done} of 14 ready`
+        const left = remainingCount()
+        document.getElementById("progress-text").textContent =
+          left > 0 ? `${done} of 14 ready · ${left} remaining to write` : `${done} of 14 ready`
         document.getElementById("progress-fill").style.width = `${(done / 14) * 100}%`
+        renderWriteReminder()
+        renderHisActivity()
 
         const list = document.getElementById("week-list")
         list.innerHTML = DAY_NAMES.map((day, dayIndex) => {
@@ -1134,10 +1357,12 @@
           week = saveWeek(week, weekOffset)
           toast("Couple code saved")
           refreshPairUI()
+          renderHisActivity()
         } catch (err) {
           BloomsStore.setCoupleCode(code)
           toast("Saved on this phone — start backend to sync")
           refreshPairUI()
+          renderHisActivity()
         }
       })
 
@@ -1151,6 +1376,11 @@
 
       document.querySelectorAll("#week-offset-toggle [data-week-offset]").forEach((btn) => {
         btn.addEventListener("click", () => setWeekOffset(btn.getAttribute("data-week-offset")))
+      })
+
+      document.getElementById("refresh-activity").addEventListener("click", async () => {
+        await renderHisActivity()
+        toast("Activity refreshed")
       })
 
       // Stamp next/this week dates + push every ready letter to his dated inbox

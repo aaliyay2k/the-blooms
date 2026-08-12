@@ -310,6 +310,40 @@ window.BloomsStore = (function () {
     return api("/api/health")
   }
 
+  async function trackActivity(type, extra = {}) {
+    const code = getCoupleCode()
+    if (!code) return null
+    try {
+      return await api(`/api/couple/${encodeURIComponent(code)}/activity`, {
+        method: "POST",
+        body: JSON.stringify({ type, ...extra }),
+      })
+    } catch {
+      return null
+    }
+  }
+
+  async function trackAppOpen() {
+    return trackActivity("open")
+  }
+
+  async function trackMessageRead(delivery) {
+    if (!delivery?.id) return null
+    return trackActivity("read", {
+      deliveryId: delivery.id,
+      dateKey: delivery.dateKey || "",
+      part: delivery.part || "",
+      dateLabel: delivery.dateLabel || "",
+      whenLabel: delivery.whenLabel || "",
+    })
+  }
+
+  async function fetchActivity() {
+    const code = getCoupleCode()
+    if (!code) throw new Error("Save your couple code first")
+    return api(`/api/couple/${encodeURIComponent(code)}/activity`)
+  }
+
   return {
     WEEK_KEY,
     getInbox,
@@ -338,6 +372,9 @@ window.BloomsStore = (function () {
     pairCouple,
     pullInbox,
     health,
+    trackAppOpen,
+    trackMessageRead,
+    fetchActivity,
     read,
     write,
   }

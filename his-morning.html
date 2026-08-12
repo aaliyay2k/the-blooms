@@ -726,7 +726,7 @@
       </div>
     </section>
 
-    <script src="./public/js/blooms-store.js?v=20260812b"></script>
+    <script src="./public/js/blooms-store.js?v=20260812e"></script>
     <script>
       const FLOWER_BASE = "https://assets.pauwee.com/color/flowers"
       let activeDelivery = null
@@ -848,6 +848,7 @@
         document.getElementById("kind-label").textContent = activeDelivery.kindLabel
         document.getElementById("message-body").textContent = activeDelivery.text
         BloomsStore.markOpened(activeDelivery.id)
+        BloomsStore.trackMessageRead(activeDelivery)
         refreshHome()
         showScreen("message")
       }
@@ -1001,6 +1002,7 @@
           status.textContent = "Connected."
           clearCoupleCodeField()
           BloomsStore.setCoupleCode(code)
+          BloomsStore.trackAppOpen()
           document.getElementById("pair").classList.remove("is-active")
           document.getElementById("home").classList.add("is-active")
           document.getElementById("home-couple-code").textContent = "Paired"

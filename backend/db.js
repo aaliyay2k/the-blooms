@@ -18,6 +18,14 @@ const CoupleSchema = new mongoose.Schema(
     week: { type: [mongoose.Schema.Types.Mixed], default: [] },
     deliveries: { type: [mongoose.Schema.Types.Mixed], default: [] },
     pushSubscriptions: { type: [mongoose.Schema.Types.Mixed], default: [] },
+    activity: {
+      type: mongoose.Schema.Types.Mixed,
+      default: () => ({
+        appOpens: 0,
+        lastOpenAt: null,
+        reads: {},
+      }),
+    },
   },
   { timestamps: true },
 )

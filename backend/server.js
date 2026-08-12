@@ -196,6 +196,99 @@ app.get(
   }),
 )
 
+function normalizeActivity(raw) {
+  const activity = raw && typeof raw === "object" ? raw : {}
+  return {
+    appOpens: Number(activity.appOpens) || 0,
+    lastOpenAt: activity.lastOpenAt || null,
+    reads:
+      activity.reads && typeof activity.reads === "object" && !Array.isArray(activity.reads)
+        ? activity.reads
+        : {},
+  }
+}
+
+app.post(
+  "/api/couple/:code/activity",
+  requireDb,
+  asyncHandler(async (req, res) => {
+    const couple = await findCouple(req.params.code)
+    const type = String(req.body?.type || "").toLowerCase()
+    const activity = normalizeActivity(couple.activity)
+    const now = new Date().toISOString()
+
+    if (type === "open") {
+      activity.appOpens += 1
+      activity.lastOpenAt = now
+    } else if (type === "read") {
+      const deliveryId = String(req.body?.deliveryId || "").trim()
+      if (!deliveryId) {
+        return res.status(400).json({ error: "deliveryId required for read" })
+      }
+      const prev = activity.reads[deliveryId] || { count: 0, lastReadAt: null }
+      activity.reads[deliveryId] = {
+        count: (Number(prev.count) || 0) + 1,
+        lastReadAt: now,
+        dateKey: req.body?.dateKey || prev.dateKey || "",
+        part: req.body?.part || prev.part || "",
+        dateLabel: req.body?.dateLabel || prev.dateLabel || "",
+        whenLabel: req.body?.whenLabel || prev.whenLabel || "",
+      }
+    } else {
+      return res.status(400).json({ error: 'type must be "open" or "read"' })
+    }
+
+    couple.activity = activity
+    couple.markModified("activity")
+    await couple.save()
+    res.json({ ok: true, activity })
+  }),
+)
+
+app.get(
+  "/api/couple/:code/activity",
+  requireDb,
+  asyncHandler(async (req, res) => {
+    const couple = await findCouple(req.params.code)
+    const activity = normalizeActivity(couple.activity)
+    const today = new Intl.DateTimeFormat("en-CA", {
+      timeZone: "Asia/Kolkata",
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+    }).format(new Date())
+
+    const readEntries = Object.entries(activity.reads).map(([id, info]) => ({
+      id,
+      count: Number(info?.count) || 0,
+      lastReadAt: info?.lastReadAt || null,
+      dateKey: info?.dateKey || "",
+      part: info?.part || "",
+      dateLabel: info?.dateLabel || "",
+      whenLabel: info?.whenLabel || "",
+    }))
+
+    const currentReads = readEntries.filter((r) => r.dateKey === today)
+    const pastReads = readEntries.filter((r) => r.dateKey && r.dateKey !== today)
+    const totalReads = readEntries.reduce((sum, r) => sum + r.count, 0)
+    const pastReadCount = pastReads.reduce((sum, r) => sum + r.count, 0)
+    const currentReadCount = currentReads.reduce((sum, r) => sum + r.count, 0)
+
+    res.json({
+      code: couple.code,
+      today,
+      appOpens: activity.appOpens,
+      lastOpenAt: activity.lastOpenAt,
+      totalReads,
+      pastReadCount,
+      currentReadCount,
+      currentReads,
+      pastReads,
+      reads: activity.reads,
+    })
+  }),
+)
+
 app.use((req, res, next) => {
   if (req.path === "/" || req.path.endsWith(".html") || req.path === "/sw.js") {
     res.set("Cache-Control", "no-store, no-cache, must-revalidate")
