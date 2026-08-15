@@ -4,7 +4,7 @@ import express from "express"
 import path from "path"
 import { fileURLToPath } from "url"
 import { connectDb, findCouple, getOrCreateCouple, isDbReady, sortDeliveries } from "./db.js"
-import { notifyPart, notifyHerWriteReminders, pushEnabled, startNotificationScheduler, sendTestPush } from "./notify.js"
+import { notifyPart, notifyHerWriteReminders, pushEnabled, startNotificationScheduler, sendTestPush, catchUpDueNotifications } from "./notify.js"
 
 dotenv.config()
 
@@ -15,7 +15,7 @@ const CRON_SECRET = process.env.CRON_SECRET || ""
 
 const app = express()
 app.use(cors())
-app.use(express.json({ limit: "8mb" }))
+app.use(express.json({ limit: "20mb" }))
 
 function asyncHandler(fn) {
   return (req, res, next) => {
@@ -32,13 +32,20 @@ function requireDb(_req, res, next) {
   next()
 }
 
-app.get("/api/health", (_req, res) => {
+app.get("/api/health", async (_req, res) => {
+  let catchUp = null
+  try {
+    catchUp = await catchUpDueNotifications()
+  } catch (err) {
+    catchUp = { ok: false, error: err.message }
+  }
   res.json({
     ok: true,
     name: "The Blooms",
     db: isDbReady() ? "connected" : "disconnected",
     push: pushEnabled,
     time: new Date().toISOString(),
+    catchUp,
   })
 })
 

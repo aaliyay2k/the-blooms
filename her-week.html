@@ -672,9 +672,13 @@
         <h2>Your write reminders</h2>
         <p id="her-notify-status">
           Get a phone notification at 12:00 PM and 7:00 PM (India time) when notes are still left.
+          On iPhone: Add to Home Screen first, then open from that icon.
         </p>
         <button type="button" class="btn btn-primary" id="enable-her-notify" style="margin-top: 0.75rem; width: 100%">
           Allow reminder notifications
+        </button>
+        <button type="button" class="btn btn-ghost" id="test-her-notify" style="margin-top: 0.45rem; width: 100%; display: none">
+          Send test reminder
         </button>
       </div>
 
@@ -759,12 +763,11 @@
       <p class="char-count" id="text-count-row"><span id="char-count">0</span>/800</p>
 
       <div id="voice-box" hidden style="margin: 0.75rem 0 1rem; display: grid; gap: 0.55rem">
-        <p class="lede" style="margin: 0">Record a short voice note (up to about 60 seconds).</p>
-        <button type="button" class="btn btn-primary" id="voice-record-btn">Hold mic — start recording</button>
+        <p class="lede" style="margin: 0">Record up to 5 short voice notes (about 60 seconds each).</p>
+        <div id="voice-list" style="display: grid; gap: 0.55rem"></div>
+        <button type="button" class="btn btn-primary" id="voice-record-btn">Record a voice note</button>
         <button type="button" class="btn btn-ghost" id="voice-stop-btn" hidden>Stop recording</button>
-        <audio id="voice-preview" controls playsinline style="width: 100%; display: none"></audio>
-        <button type="button" class="btn btn-ghost" id="voice-clear-btn" hidden>Remove voice note</button>
-        <p class="count-line" id="voice-status">No voice note yet</p>
+        <p class="count-line" id="voice-status">No voice notes yet</p>
       </div>
 
       <div class="actions">
@@ -784,7 +787,7 @@
       <article class="message-shell" id="final-shell" data-kind="letter">
         <p class="message-kind" id="final-kind">Love letter</p>
         <p class="message-body" id="final-body"></p>
-        <audio id="final-voice" controls playsinline style="display: none; width: 100%; margin-top: 0.85rem"></audio>
+        <div id="final-voice-list" style="display: none; width: 100%; margin-top: 0.85rem"></div>
       </article>
 
       <div class="actions">
@@ -795,7 +798,7 @@
 
     <div class="toast" id="toast">Saved</div>
 
-    <script src="./public/js/blooms-store.js?v=20260812i"></script>
+    <script src="./public/js/blooms-store.js?v=20260815a"></script>
     <script>
       const LEGACY_STORAGE_KEY = "blooms:her-week-v2"
       const OFFSET_KEY = "blooms:plan-week-offset"
@@ -852,6 +855,8 @@
               flowers: [],
               kind: part === "morning" ? "letter" : "note",
               text: "",
+              voiceData: "",
+              voices: [],
               done: false,
             })
           })
@@ -944,11 +949,13 @@
       }
 
       function slotHasContent(slot) {
-        return Boolean(slot?.done && ((slot.text && slot.text.trim()) || slot.voiceData))
+        const voices = BloomsStore.normalizeVoices(slot)
+        return Boolean(slot?.done && ((slot.text && slot.text.trim()) || voices.length))
       }
 
       function deliveryHasContent(d) {
-        return Boolean(d && ((d.text && String(d.text).trim()) || d.voiceData))
+        const voices = BloomsStore.normalizeVoices(d)
+        return Boolean(d && ((d.text && String(d.text).trim()) || voices.length))
       }
 
       /** Merge cloud week + deliveries so any device shows the same letters/voice notes. */
@@ -959,16 +966,17 @@
           const byDate = new Map(
             (deliveries || []).filter(deliveryHasContent).map((d) => [`${d.dateKey}-${d.part}`, d]),
           )
+          // Only trust remote week slots that match this week's dateKeys (same ids every week otherwise)
           const byId = new Map()
           if (Array.isArray(remoteWeek)) {
             remoteWeek.forEach((s) => {
-              if (s?.id) byId.set(s.id, s)
+              if (s?.id && s?.dateKey) byId.set(`${s.dateKey}-${s.part || s.id}`, s)
             })
           }
 
           let changed = 0
           const merged = weekData.map((slot) => {
-            const remote = byId.get(slot.id)
+            const remote = byId.get(`${slot.dateKey}-${slot.part}`)
             const delivery = byDate.get(`${slot.dateKey}-${slot.part}`)
             const source =
               remote && slotHasContent(remote)
@@ -979,22 +987,35 @@
                       kind: delivery.kind,
                       text: delivery.text,
                       voiceData: delivery.voiceData,
+                      voices: delivery.voices,
                       done: true,
                     }
                   : null
 
             if (!source) return slot
-            if (slotHasContent(slot) && !delivery?.voiceData && slot.voiceData) return slot
-            if (slotHasContent(slot) && slot.text && (!source.text || source.text === slot.text) && !source.voiceData)
+
+            const nextVoices = BloomsStore.normalizeVoices(source).length
+              ? BloomsStore.normalizeVoices(source)
+              : BloomsStore.normalizeVoices(slot)
+            const localVoices = BloomsStore.normalizeVoices(slot)
+
+            if (slotHasContent(slot) && localVoices.length && !BloomsStore.normalizeVoices(source).length)
+              return slot
+            if (
+              slotHasContent(slot) &&
+              slot.text &&
+              (!source.text || source.text === slot.text) &&
+              !BloomsStore.normalizeVoices(source).length
+            )
               return slot
 
             const nextText = source.text || slot.text || ""
-            const nextVoice = source.voiceData || slot.voiceData || ""
-            const nextKind = source.kind || (nextVoice ? "voice" : slot.kind)
+            const nextKind = source.kind || (nextVoices.length ? "voice" : slot.kind)
+            const voiceSig = (list) => list.map((v) => v.data?.slice(0, 32)).join("|")
             if (
               slot.done &&
               slot.text === nextText &&
-              (slot.voiceData || "") === nextVoice &&
+              voiceSig(localVoices) === voiceSig(nextVoices) &&
               slot.kind === nextKind
             ) {
               return slot
@@ -1005,7 +1026,8 @@
               flowers: normalizeFlowers(source.flowers || slot.flowers),
               kind: nextKind,
               text: nextText,
-              voiceData: nextVoice,
+              voices: nextVoices,
+              voiceData: nextVoices[0]?.data || "",
               done: true,
             }
           })
@@ -1020,10 +1042,13 @@
         return syncFromCloud(weekData)
       }
 
-      function setWeekOffset(nextOffset) {
+      let weekSwitchLock = false
+      async function setWeekOffset(nextOffset) {
         const offset = Number(nextOffset) === 0 ? 0 : 1
-        if (offset === weekOffset) return
-        Promise.resolve(saveWeek(week, weekOffset)).then(async () => {
+        if (offset === weekOffset || weekSwitchLock) return
+        weekSwitchLock = true
+        try {
+          await saveWeek(week, weekOffset)
           weekOffset = offset
           localStorage.setItem(OFFSET_KEY, String(weekOffset))
           week = loadWeek(weekOffset)
@@ -1031,7 +1056,9 @@
           week = await saveWeek(week, weekOffset)
           renderHome()
           toast(weekOffset === 1 ? "Planning next week — synced" : "Planning this week — synced")
-        })
+        } finally {
+          weekSwitchLock = false
+        }
       }
 
       let week = loadWeek(weekOffset)
@@ -1075,25 +1102,42 @@
         return week.filter((s) => !s.done).length
       }
 
-      function refreshHerNotifyStatus() {
+      async function refreshHerNotifyStatus() {
         const status = document.getElementById("her-notify-status")
         const btn = document.getElementById("enable-her-notify")
+        const testBtn = document.getElementById("test-her-notify")
         const permission = BloomsStore.notificationPermission()
+        const canPush = BloomsStore.pushSupported()
+        const ready = canPush ? await BloomsStore.isPushReady("her") : false
         const left = remainingCount()
         const leftLine =
           left > 0
             ? `${left} note${left === 1 ? "" : "s"} still remaining on this plan.`
             : "All notes for this plan are ready."
 
-        if (permission === "granted") {
-          status.textContent = `${leftLine} Reminders on — 12:00 PM & 7:00 PM India time.`
-          btn.textContent = "Reminders enabled"
+        if (testBtn) testBtn.style.display = ready ? "block" : "none"
+
+        if (ready) {
+          status.textContent = `${leftLine} Reminders linked — 12:00 PM & 7:00 PM India time. Tap Send test reminder to check.`
+          btn.textContent = "Reminders linked"
           btn.disabled = true
+          return
+        }
+        if (!canPush) {
+          status.textContent = `${leftLine} On iPhone, notifications need Home Screen: Safari → Share → Add to Home Screen, open from the icon, then tap Allow.`
+          btn.textContent = "Allow reminder notifications"
+          btn.disabled = false
           return
         }
         if (permission === "denied") {
           status.textContent = `${leftLine} Notifications are blocked — allow them in phone settings, then tap again.`
           btn.textContent = "Try reminders again"
+          btn.disabled = false
+          return
+        }
+        if (permission === "granted") {
+          status.textContent = `${leftLine} Permission is on, but this phone is not linked yet. Tap below once.`
+          btn.textContent = "Finish reminder setup"
           btn.disabled = false
           return
         }
@@ -1222,7 +1266,13 @@
         const dateHint = slot.dateLabel || (slot.dateKey ? BloomsStore.formatDateKey(slot.dateKey) : "")
         const state = slot.done ? "Ready" : isPast ? "Past · tap to edit" : "Tap to create"
         const kindLabel =
-          slot.kind === "letter" ? "letter" : slot.kind === "voice" ? "voice" : "note"
+          slot.kind === "letter"
+            ? "letter"
+            : slot.kind === "voice"
+              ? BloomsStore.normalizeVoices(slot).length > 1
+                ? `${BloomsStore.normalizeVoices(slot).length} voices`
+                : "voice"
+              : "note"
         const hint = slot.done
           ? `${dateHint} · ${slot.flowers.length} flowers · ${kindLabel}`
           : dateHint || "Bouquet + words"
@@ -1244,7 +1294,8 @@
           flowers: normalizeFlowers(slot.flowers).map((f) => ({ ...f })),
           kind: slot.kind,
           text: slot.text,
-          voiceData: slot.voiceData || "",
+          voices: BloomsStore.normalizeVoices(slot),
+          voiceData: BloomsStore.normalizeVoices(slot)[0]?.data || "",
         }
         topZ = Math.max(10, ...draft.flowers.map((f) => f.z || 0))
         document.getElementById("bouquet-slot-label").textContent = slot.label
@@ -1391,6 +1442,15 @@
 
       let mediaRecorder = null
       let recordChunks = []
+      let recordTimer = null
+      const MAX_VOICES = 5
+
+      function draftVoices() {
+        if (!draft) return []
+        draft.voices = BloomsStore.normalizeVoices(draft)
+        draft.voiceData = draft.voices[0]?.data || ""
+        return draft.voices
+      }
 
       function setVoiceUi() {
         const isVoice = draft.kind === "voice"
@@ -1398,19 +1458,40 @@
         document.getElementById("voice-box").style.display = isVoice ? "grid" : "none"
         document.getElementById("message-text").style.display = isVoice ? "none" : "block"
         document.getElementById("text-count-row").style.display = isVoice ? "none" : "block"
-        const preview = document.getElementById("voice-preview")
-        const clearBtn = document.getElementById("voice-clear-btn")
+        const list = document.getElementById("voice-list")
         const status = document.getElementById("voice-status")
-        if (draft.voiceData) {
-          preview.style.display = "block"
-          preview.src = draft.voiceData
-          clearBtn.hidden = false
-          status.textContent = "Voice note ready"
+        const recordBtn = document.getElementById("voice-record-btn")
+        const voices = draftVoices()
+        list.innerHTML = voices
+          .map(
+            (v, i) => `
+          <div style="display:grid;gap:0.35rem;padding:0.55rem 0.65rem;border-radius:14px;background:rgba(255,250,244,.85)">
+            <p class="count-line" style="margin:0">Voice ${i + 1}</p>
+            <audio controls playsinline src="${v.data}" style="width:100%"></audio>
+            <button type="button" class="btn btn-ghost" data-remove-voice="${v.id}" style="width:100%">Remove</button>
+          </div>`,
+          )
+          .join("")
+        list.querySelectorAll("[data-remove-voice]").forEach((btn) => {
+          btn.addEventListener("click", () => {
+            const id = btn.getAttribute("data-remove-voice")
+            draft.voices = draftVoices().filter((v) => v.id !== id)
+            draft.voiceData = draft.voices[0]?.data || ""
+            setVoiceUi()
+            updateMessageButton()
+          })
+        })
+        if (voices.length) {
+          status.textContent =
+            voices.length >= MAX_VOICES
+              ? `${voices.length} voice notes ready (max ${MAX_VOICES})`
+              : `${voices.length} voice note${voices.length === 1 ? "" : "s"} ready — you can add more`
+          recordBtn.hidden = voices.length >= MAX_VOICES
+          recordBtn.textContent = "Record another voice note"
         } else {
-          preview.style.display = "none"
-          preview.removeAttribute("src")
-          clearBtn.hidden = true
-          status.textContent = "No voice note yet"
+          status.textContent = "No voice notes yet"
+          recordBtn.hidden = false
+          recordBtn.textContent = "Record a voice note"
         }
       }
 
@@ -1427,7 +1508,7 @@
 
       function updateMessageButton() {
         if (draft.kind === "voice") {
-          document.getElementById("to-preview").disabled = !draft.voiceData
+          document.getElementById("to-preview").disabled = draftVoices().length === 0
           return
         }
         const text = document.getElementById("message-text").value.trim()
@@ -1435,23 +1516,37 @@
       }
 
       function openPreview() {
+        const voices = draftVoices()
         if (draft.kind !== "voice") {
           draft.text = document.getElementById("message-text").value.trim()
-        } else if (!draft.text) {
-          draft.text = "A voice note for you."
+        } else if (!draft.text || draft.text === "A voice note for you.") {
+          draft.text =
+            voices.length > 1 ? `${voices.length} voice notes for you.` : "A voice note for you."
         }
         renderBouquetPreview("final-preview", draft.flowers, false)
         const shell = document.getElementById("final-shell")
         shell.dataset.kind = draft.kind
-        document.getElementById("final-kind").textContent = BloomsStore.kindLabelFor(draft.kind)
+        document.getElementById("final-kind").textContent =
+          draft.kind === "voice" && voices.length > 1
+            ? `${voices.length} voice notes`
+            : BloomsStore.kindLabelFor(draft.kind)
         document.getElementById("final-body").textContent = draft.text
-        const finalVoice = document.getElementById("final-voice")
-        if (draft.kind === "voice" && draft.voiceData) {
-          finalVoice.style.display = "block"
-          finalVoice.src = draft.voiceData
+        const finalList = document.getElementById("final-voice-list")
+        if (draft.kind === "voice" && voices.length) {
+          finalList.style.display = "grid"
+          finalList.style.gap = "0.55rem"
+          finalList.innerHTML = voices
+            .map(
+              (v, i) => `
+            <div>
+              <p class="count-line" style="margin:0 0 0.3rem">Voice ${i + 1}</p>
+              <audio controls playsinline src="${v.data}" style="width:100%"></audio>
+            </div>`,
+            )
+            .join("")
         } else {
-          finalVoice.style.display = "none"
-          finalVoice.removeAttribute("src")
+          finalList.style.display = "none"
+          finalList.innerHTML = ""
         }
         showScreen("preview-message")
       }
@@ -1459,12 +1554,14 @@
       async function saveCurrent() {
         const idx = week.findIndex((s) => s.id === editingId)
         if (idx < 0) return
+        const voices = draft.kind === "voice" ? draftVoices() : []
         week[idx] = {
           ...week[idx],
           flowers: draft.flowers.map((f) => ({ ...f })),
           kind: draft.kind,
           text: draft.text,
-          voiceData: draft.kind === "voice" ? draft.voiceData || "" : "",
+          voices,
+          voiceData: voices[0]?.data || "",
           done: true,
         }
         week = await saveWeek(week, weekOffset)
@@ -1512,6 +1609,10 @@
       })
 
       document.getElementById("voice-record-btn").addEventListener("click", async () => {
+        if (draftVoices().length >= MAX_VOICES) {
+          toast(`Max ${MAX_VOICES} voice notes`)
+          return
+        }
         try {
           const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
           recordChunks = []
@@ -1525,19 +1626,35 @@
             if (e.data.size > 0) recordChunks.push(e.data)
           }
           mediaRecorder.onstop = async () => {
+            if (recordTimer) {
+              clearTimeout(recordTimer)
+              recordTimer = null
+            }
             stream.getTracks().forEach((t) => t.stop())
             const blob = new Blob(recordChunks, { type: mediaRecorder.mimeType || "audio/webm" })
+            document.getElementById("voice-record-btn").hidden = draftVoices().length >= MAX_VOICES
+            document.getElementById("voice-stop-btn").hidden = true
             if (blob.size > 1_800_000) {
               toast("Voice note too long — try a shorter one")
               document.getElementById("voice-status").textContent = "Too long — record again"
+              setVoiceUi()
               return
             }
             const reader = new FileReader()
             reader.onload = () => {
-              draft.voiceData = String(reader.result || "")
+              const data = String(reader.result || "")
+              if (!data) return
+              const voices = draftVoices()
+              voices.push({
+                id: `v${Date.now()}`,
+                data,
+                createdAt: new Date().toISOString(),
+              })
+              draft.voices = voices
+              draft.voiceData = voices[0].data
               setVoiceUi()
               updateMessageButton()
-              toast("Voice note captured")
+              toast("Voice note added")
             }
             reader.readAsDataURL(blob)
           }
@@ -1545,10 +1662,9 @@
           document.getElementById("voice-record-btn").hidden = true
           document.getElementById("voice-stop-btn").hidden = false
           document.getElementById("voice-status").textContent = "Recording…"
-          setTimeout(() => {
+          if (recordTimer) clearTimeout(recordTimer)
+          recordTimer = setTimeout(() => {
             if (mediaRecorder && mediaRecorder.state === "recording") mediaRecorder.stop()
-            document.getElementById("voice-record-btn").hidden = false
-            document.getElementById("voice-stop-btn").hidden = true
           }, 60000)
         } catch (err) {
           toast("Microphone permission needed")
@@ -1557,15 +1673,11 @@
       })
 
       document.getElementById("voice-stop-btn").addEventListener("click", () => {
+        if (recordTimer) {
+          clearTimeout(recordTimer)
+          recordTimer = null
+        }
         if (mediaRecorder && mediaRecorder.state === "recording") mediaRecorder.stop()
-        document.getElementById("voice-record-btn").hidden = false
-        document.getElementById("voice-stop-btn").hidden = true
-      })
-
-      document.getElementById("voice-clear-btn").addEventListener("click", () => {
-        draft.voiceData = ""
-        setVoiceUi()
-        updateMessageButton()
       })
 
       document.getElementById("message-text").addEventListener("input", (e) => {
@@ -1630,6 +1742,8 @@
         renderHome()
         refreshPairUI()
         renderHisActivity()
+        refreshHerNotifyStatus()
+        BloomsStore.health().catch(() => {})
         toast("Unlocked — synced")
       }
 
@@ -1680,13 +1794,43 @@
         status.textContent = "Asking your phone for permission…"
         try {
           await BloomsStore.enablePushNotifications("her")
-          toast("Reminders on")
-          refreshHerNotifyStatus()
+          try {
+            await BloomsStore.sendTestPush("her")
+            toast("Test reminder sent")
+            status.textContent = "Test sent — if you got it, 12:00 & 19:00 reminders will work."
+          } catch (testErr) {
+            toast("Linked — test failed")
+            status.textContent = "Linked, but test failed: " + (testErr.message || "try Send test reminder")
+          }
+          await refreshHerNotifyStatus()
         } catch (err) {
-          status.textContent = err.message || "Couldn’t enable reminders."
-          refreshHerNotifyStatus()
+          const msg = err.message || "Couldn’t enable reminders."
+          status.textContent = msg
+          await refreshHerNotifyStatus()
+          status.textContent = msg
+        } finally {
+          const ready = await BloomsStore.isPushReady("her")
+          btn.disabled = ready
         }
       })
+
+      const testHerNotify = document.getElementById("test-her-notify")
+      if (testHerNotify) {
+        testHerNotify.addEventListener("click", async () => {
+          const status = document.getElementById("her-notify-status")
+          testHerNotify.disabled = true
+          status.textContent = "Sending test…"
+          try {
+            await BloomsStore.sendTestPush("her")
+            status.textContent = "Test sent — check your notification shade."
+            toast("Test reminder sent")
+          } catch (err) {
+            status.textContent = err.message || "Test failed."
+          } finally {
+            testHerNotify.disabled = false
+          }
+        })
+      }
 
       // Always ask for couple code when her side opens
       showHerPairGate("Enter your couple code to open The Blooms.")

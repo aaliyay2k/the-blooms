@@ -756,7 +756,7 @@
         <article class="message-shell" id="message-shell" data-kind="letter">
           <p class="message-kind" id="message-kind">Love letter</p>
           <p class="message-body" id="message-body"></p>
-          <audio id="message-audio" controls playsinline style="display:none;width:100%;margin-top:1rem"></audio>
+          <div id="message-audio-list" style="display:none;width:100%;margin-top:1rem"></div>
           <p class="message-sign">— with love</p>
         </article>
         <div class="actions">
@@ -765,7 +765,7 @@
       </div>
     </section>
 
-    <script src="./public/js/blooms-store.js?v=20260812k"></script>
+    <script src="./public/js/blooms-store.js?v=20260815a"></script>
     <script>
       const FLOWER_BASE = "https://assets.pauwee.com/color/flowers"
       let activeDelivery = null
@@ -969,12 +969,19 @@
       }
 
       function fillDeliveryWords(delivery) {
-        const kind = delivery.kind || (delivery.voiceData ? "voice" : "note")
+        const voices = BloomsStore.normalizeVoices(delivery)
+        const kind = delivery.kind || (voices.length ? "voice" : "note")
         const kindLabel =
           delivery.kindLabel ||
-          (kind === "letter" ? "Love letter" : kind === "voice" ? "Voice note" : "Small note")
+          (kind === "letter"
+            ? "Love letter"
+            : kind === "voice"
+              ? voices.length > 1
+                ? `${voices.length} voice notes`
+                : "Voice note"
+              : "Small note")
         const shell = document.getElementById("message-shell")
-        const audio = document.getElementById("message-audio")
+        const audioList = document.getElementById("message-audio-list")
         const hint = document.getElementById("scroll-hint")
 
         shell.dataset.kind = kind
@@ -983,23 +990,39 @@
 
         if (kind === "voice") {
           document.getElementById("message-body").textContent =
-            delivery.text && delivery.text !== "A voice note for you."
+            delivery.text &&
+            delivery.text !== "A voice note for you." &&
+            !/^\d+ voice notes for you\.$/.test(delivery.text)
               ? delivery.text
-              : "A voice note for you."
-          hint.textContent = "Scroll down for her voice note ↓"
-          if (delivery.voiceData) {
-            audio.style.display = "block"
-            audio.src = delivery.voiceData
+              : voices.length > 1
+                ? `${voices.length} voice notes for you.`
+                : "A voice note for you."
+          hint.textContent =
+            voices.length > 1
+              ? `Scroll down for her ${voices.length} voice notes ↓`
+              : "Scroll down for her voice note ↓"
+          if (voices.length) {
+            audioList.style.display = "grid"
+            audioList.style.gap = "0.65rem"
+            audioList.innerHTML = voices
+              .map(
+                (v, i) => `
+              <div>
+                <p class="time-chip" style="margin:0 0 0.35rem">Voice ${i + 1}</p>
+                <audio controls playsinline src="${v.data}" style="width:100%"></audio>
+              </div>`,
+              )
+              .join("")
           } else {
-            audio.style.display = "none"
-            audio.removeAttribute("src")
+            audioList.style.display = "none"
+            audioList.innerHTML = ""
           }
         } else {
           document.getElementById("message-body").textContent = delivery.text || ""
           hint.textContent =
             kind === "letter" ? "Scroll down for her letter ↓" : "Scroll down for her note ↓"
-          audio.style.display = "none"
-          audio.removeAttribute("src")
+          audioList.style.display = "none"
+          audioList.innerHTML = ""
         }
       }
 
@@ -1205,6 +1228,7 @@
           renderInstallSteps()
           // Permission must come from a tap — show the Allow button instead of auto-prompting
           refreshNotifyCard()
+          BloomsStore.health().catch(() => {})
           showScreen("home")
         } catch (err) {
           status.textContent = err.message || "Wrong couple code. Try again."

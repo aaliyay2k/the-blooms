@@ -201,11 +201,35 @@ window.BloomsStore = (function () {
     return "Small note"
   }
 
+  function normalizeVoices(slotOrDelivery) {
+    const list = Array.isArray(slotOrDelivery?.voices)
+      ? slotOrDelivery.voices.filter((v) => v && v.data)
+      : []
+    if (list.length) {
+      return list.map((v, i) => ({
+        id: v.id || `v${i + 1}`,
+        data: v.data,
+        createdAt: v.createdAt || new Date().toISOString(),
+      }))
+    }
+    if (slotOrDelivery?.voiceData) {
+      return [
+        {
+          id: "v1",
+          data: slotOrDelivery.voiceData,
+          createdAt: new Date().toISOString(),
+        },
+      ]
+    }
+    return []
+  }
+
   function deliveryFromSlot(slot) {
     if (!slot || !slot.done) return null
     const key = slot.dateKey || dateKey(dateForWeekSlot(slot.dayIndex))
     const dateLabel = slot.dateLabel || formatDateKey(key)
-    const hasVoice = Boolean(slot.voiceData)
+    const voices = normalizeVoices(slot)
+    const hasVoice = voices.length > 0
     const kind = slot.kind || (hasVoice ? "voice" : "note")
     return {
       id: `${key}-${slot.part}`,
@@ -221,8 +245,15 @@ window.BloomsStore = (function () {
       flowers: (slot.flowers || []).map((f) => ({ ...f })),
       kind,
       kindLabel: kindLabelFor(kind),
-      text: slot.text || (kind === "voice" ? "A voice note for you." : ""),
-      voiceData: slot.voiceData || "",
+      text:
+        slot.text ||
+        (kind === "voice"
+          ? voices.length > 1
+            ? `${voices.length} voice notes for you.`
+            : "A voice note for you."
+          : ""),
+      voiceData: voices[0]?.data || "",
+      voices,
       savedAt: new Date().toISOString(),
       unlockHour: slot.part === "night" ? 23 : 10,
       unlockMinute: 0,
@@ -526,6 +557,7 @@ window.BloomsStore = (function () {
     pullInbox,
     pullWeekPlan,
     kindLabelFor,
+    normalizeVoices,
     health,
     trackAppOpen,
     trackMessageRead,

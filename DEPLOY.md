@@ -24,11 +24,21 @@ Your app is ready to go live. The backend serves both the website and API.
 - **Him:** `https://YOUR-APP.onrender.com/`
 - **You:** `https://YOUR-APP.onrender.com/the-blooms.html`
 
-### Notifications
-- He opens the site → enters code → allow notifications
-- Server sends pushes at **10:00 AM** and **11:00 PM** India time
-- Free Render may sleep; keep it awake with a free cron ping to `/api/health` every 10 minutes, or call:
-  - `POST /api/cron/notify` with header `x-cron-secret: YOUR_SECRET` and body `{"part":"morning"}` or `{"part":"night"}`
+### Notifications (important on free Render)
+Free Render **sleeps**, so in-app cron alone is unreliable. This app also **catch-up sends** due alerts whenever `/api/health` is hit (opening either link wakes the server).
+
+Still recommended — free cron every 10 min to:
+`https://YOUR-APP.onrender.com/api/health`
+
+And at IST times, hit:
+- `GET https://YOUR-APP.onrender.com/api/cron/notify?part=morning&secret=YOUR_CRON_SECRET` (10:00)
+- `GET ...?part=night&secret=...` (23:00)
+- `GET ...?part=her-reminder&secret=...` (12:00 and 19:00)
+
+On phones: Add to Home Screen → open from icon → Allow → **Send test**.
+
+Him: morning/night only fire if that day’s delivery is saved.
+You: reminders only if notes remain on the cloud week plan.
 
 ## Option B — keep local for now
 ```bash

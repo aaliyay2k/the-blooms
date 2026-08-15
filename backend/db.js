@@ -19,6 +19,7 @@ const CoupleSchema = new mongoose.Schema(
     deliveries: { type: [mongoose.Schema.Types.Mixed], default: [] },
     pushSubscriptions: { type: [mongoose.Schema.Types.Mixed], default: [] },
     herPushSubscriptions: { type: [mongoose.Schema.Types.Mixed], default: [] },
+    notifySent: { type: mongoose.Schema.Types.Mixed, default: () => ({}) },
     activity: {
       type: mongoose.Schema.Types.Mixed,
       default: () => ({
