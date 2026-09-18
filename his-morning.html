@@ -1141,25 +1141,34 @@
       document.getElementById("slot-morning").addEventListener("click", () => openToday("morning"))
       document.getElementById("slot-night").addEventListener("click", () => openToday("night"))
 
-      function wipeSavedCoupleCode() {
-        try {
-          localStorage.removeItem("blooms:couple-code")
-          sessionStorage.removeItem("blooms:couple-code")
-        } catch (_) {}
-        BloomsStore.setCoupleCode("")
-      }
-
       function readCoupleCodeField() {
         const el = document.getElementById("his-couple-code")
         return (el?.innerText || el?.textContent || "").replace(/\s+/g, "").trim()
       }
 
+      /** Clears the typing field only — does not forget a saved couple code. */
       function clearCoupleCodeField() {
-        wipeSavedCoupleCode()
         const el = document.getElementById("his-couple-code")
         if (!el) return
         el.textContent = ""
         el.innerHTML = ""
+      }
+
+      async function enterHome(code) {
+        const clean = String(code || "").trim().toUpperCase()
+        BloomsStore.setCoupleCode(clean)
+        BloomsStore.trackAppOpen()
+        document.getElementById("pair").classList.remove("is-active")
+        document.body.classList.remove("is-night-theme")
+        document.getElementById("home").classList.add("is-active")
+        document.getElementById("home-couple-code").textContent = "Paired"
+        clearCoupleCodeField()
+        await BloomsStore.pullInbox()
+        refreshHome()
+        renderInstallSteps()
+        refreshNotifyCard()
+        BloomsStore.health().catch(() => {})
+        showScreen("home")
       }
 
       async function showPairScreen(message) {
@@ -1181,7 +1190,17 @@
       }
 
       async function boot() {
-        wipeSavedCoupleCode()
+        const saved = BloomsStore.getCoupleCode()
+        if (saved && saved.length >= 4) {
+          try {
+            await BloomsStore.pairCouple(saved, { role: "him" })
+            await enterHome(saved)
+            return
+          } catch (_) {
+            // Saved code no longer works — ask again, keep field empty
+            BloomsStore.setCoupleCode("")
+          }
+        }
         await showPairScreen("Enter your couple code to open The Blooms.")
       }
 
@@ -1192,11 +1211,11 @@
       })
 
       document.getElementById("change-couple-code").addEventListener("click", () => {
-        showPairScreen("Enter the couple code again.")
+        showPairScreen("Enter a couple code.")
       })
 
       document.getElementById("home-couple-code").addEventListener("click", () => {
-        showPairScreen("Enter the couple code again.")
+        showPairScreen("Enter a couple code.")
       })
 
       document.getElementById("his-couple-code").addEventListener("keydown", (e) => {
@@ -1216,20 +1235,7 @@
         try {
           await BloomsStore.pairCouple(code, { role: "him" })
           status.textContent = "Connected."
-          clearCoupleCodeField()
-          BloomsStore.setCoupleCode(code)
-          BloomsStore.trackAppOpen()
-          document.getElementById("pair").classList.remove("is-active")
-          document.body.classList.remove("is-night-theme")
-          document.getElementById("home").classList.add("is-active")
-          document.getElementById("home-couple-code").textContent = "Paired"
-          await BloomsStore.pullInbox()
-          refreshHome()
-          renderInstallSteps()
-          // Permission must come from a tap — show the Allow button instead of auto-prompting
-          refreshNotifyCard()
-          BloomsStore.health().catch(() => {})
-          showScreen("home")
+          await enterHome(code)
         } catch (err) {
           status.textContent = err.message || "Wrong couple code. Try again."
         }

@@ -383,7 +383,7 @@ async function start() {
   }
 
   app.listen(PORT, () => {
-    // Redeploy bump 2026-09-18T12:12:07.2565989+05:30
+    // Redeploy bump 2026-09-18T12:29:59.5216695+05:30 — remember his couple code
     console.log(`The Blooms running on http://localhost:${PORT}`)
     console.log(`His side:     http://localhost:${PORT}/`)
     console.log(`Your side:    http://localhost:${PORT}/the-blooms.html`)
