@@ -1696,13 +1696,13 @@
         BloomsStore.health()
           .then(() => {
             status.textContent = code
-              ? `Connected · ${code} · backend online`
-              : "Backend online — enter your couple code to sync."
+              ? `Connected · ${code}`
+              : "Enter your couple code to sync."
           })
           .catch(() => {
             status.textContent = code
-              ? `Code ${code} on this session. Backend offline.`
-              : "Start the backend, then enter your couple code."
+              ? `Code ${code} · reconnecting…`
+              : "Enter your couple code to sync."
           })
       }
 
