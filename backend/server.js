@@ -1,3 +1,4 @@
+﻿// Redeploy bump 2026-09-18T13:27:15.8183882+05:30 manual trigger
 import cors from "cors"
 import dotenv from "dotenv"
 import express from "express"
@@ -76,7 +77,7 @@ function normalizeActivity(raw) {
   }
 }
 
-/** Health — fast response; catch-up runs in background so Render free tier stays healthy */
+/** Health â€” fast response; catch-up runs in background so Render free tier stays healthy */
 app.get("/api/health", (_req, res) => {
   res.json({
     ok: true,
@@ -256,7 +257,7 @@ app.post(
   }),
 )
 
-/** How many phones are linked for push — used so her side can see if his alerts are on */
+/** How many phones are linked for push â€” used so her side can see if his alerts are on */
 app.get(
   "/api/couple/:code/push-status",
   requireDb,
@@ -463,7 +464,7 @@ async function start() {
   } catch (err) {
     console.error("MongoDB connection failed:", err.message)
     if (/whitelist|IP/i.test(err.message)) {
-      console.error("Fix: Atlas → Network Access → Allow Access from Anywhere (0.0.0.0/0)")
+      console.error("Fix: Atlas â†’ Network Access â†’ Allow Access from Anywhere (0.0.0.0/0)")
     } else {
       console.error("Check backend/.env MONGODB_URI")
     }
