@@ -1,4 +1,4 @@
-import cors from "cors"
+﻿import cors from "cors"
 import dotenv from "dotenv"
 import express from "express"
 import path from "path"
@@ -375,7 +375,7 @@ async function start() {
     console.error("MongoDB connection failed:", err.message)
     if (/whitelist|IP/i.test(err.message)) {
       console.error(
-        "Fix: Atlas → Network Access → Add IP → Allow Access from Anywhere (0.0.0.0/0)",
+        "Fix: Atlas â†’ Network Access â†’ Add IP â†’ Allow Access from Anywhere (0.0.0.0/0)",
       )
     } else {
       console.error("Check backend/.env MONGODB_URI from MongoDB Atlas.")
@@ -383,11 +383,11 @@ async function start() {
   }
 
   app.listen(PORT, () => {
-    // Redeploy bump — static pages (his-morning.html) ship with this process
+    // Redeploy bump 2026-09-18T12:12:07.2565989+05:30
     console.log(`The Blooms running on http://localhost:${PORT}`)
     console.log(`His side:     http://localhost:${PORT}/`)
     console.log(`Your side:    http://localhost:${PORT}/the-blooms.html`)
-    console.log(`Database:     ${isDbReady() ? "MongoDB connected" : "NOT connected — add MONGODB_URI"}`)
+    console.log(`Database:     ${isDbReady() ? "MongoDB connected" : "NOT connected â€” add MONGODB_URI"}`)
     console.log(`Push:         ${pushEnabled ? "enabled (him 10/23, her 12/19 IST)" : "disabled"}`)
     startNotificationScheduler()
   })
