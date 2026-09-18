@@ -1,14 +1,23 @@
-﻿import cors from "cors"
+import cors from "cors"
 import dotenv from "dotenv"
 import express from "express"
 import path from "path"
 import { fileURLToPath } from "url"
 import { connectDb, findCouple, getOrCreateCouple, isDbReady, sortDeliveries } from "./db.js"
-import { notifyPart, notifyHerWriteReminders, pushEnabled, startNotificationScheduler, sendTestPush, catchUpDueNotifications } from "./notify.js"
-
-dotenv.config()
+import {
+  catchUpDueNotifications,
+  getVapidPublicKey,
+  normalizeSubscription,
+  notifyHerWriteReminders,
+  notifyPart,
+  pushEnabled,
+  sendTestPush,
+  startNotificationScheduler,
+} from "./notify.js"
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
+dotenv.config({ path: path.join(__dirname, ".env") })
+
 const PORT = process.env.PORT || 8787
 const SITE_ROOT = path.join(__dirname, "..")
 const CRON_SECRET = process.env.CRON_SECRET || ""
@@ -25,114 +34,70 @@ function asyncHandler(fn) {
 
 function requireDb(_req, res, next) {
   if (!isDbReady()) {
-    return res.status(503).json({
-      error: "Database is starting up. Try again in a moment.",
-    })
+    return res.status(503).json({ error: "Database is starting up. Try again in a moment." })
   }
   next()
 }
 
-app.get("/api/health", async (_req, res) => {
-  let catchUp = null
-  try {
-    catchUp = await catchUpDueNotifications()
-  } catch (err) {
-    catchUp = { ok: false, error: err.message }
+function upsertDelivery(list, delivery) {
+  const next = Array.isArray(list) ? [...list] : []
+  const id = delivery.id || `${delivery.dateKey}-${delivery.part}`
+  delivery.id = id
+  const idx = next.findIndex((d) => d.id === id)
+  if (idx >= 0) next[idx] = { ...next[idx], ...delivery }
+  else next.push(delivery)
+  return sortDeliveries(next)
+}
+
+function authorizeCron(req) {
+  if (!CRON_SECRET) return true
+  const secret = req.get("x-cron-secret") || req.query.secret
+  return secret === CRON_SECRET
+}
+
+function indiaToday() {
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Kolkata",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(new Date())
+}
+
+function normalizeActivity(raw) {
+  const activity = raw && typeof raw === "object" ? raw : {}
+  return {
+    appOpens: Number(activity.appOpens) || 0,
+    lastOpenAt: activity.lastOpenAt || null,
+    reads:
+      activity.reads && typeof activity.reads === "object" && !Array.isArray(activity.reads)
+        ? activity.reads
+        : {},
   }
+}
+
+/** Health — fast response; catch-up runs in background so Render free tier stays healthy */
+app.get("/api/health", (_req, res) => {
   res.json({
     ok: true,
     name: "The Blooms",
     db: isDbReady() ? "connected" : "disconnected",
     push: pushEnabled,
     time: new Date().toISOString(),
-    catchUp,
   })
+
+  if (isDbReady() && pushEnabled) {
+    catchUpDueNotifications().catch((err) => {
+      console.error("Catch-up notify failed:", err.message)
+    })
+  }
 })
 
 app.get("/api/push/public-key", (_req, res) => {
-  if (!process.env.VAPID_PUBLIC_KEY) {
-    return res.status(503).json({ error: "Push not configured" })
-  }
-  res.json({ publicKey: process.env.VAPID_PUBLIC_KEY })
+  const publicKey = getVapidPublicKey()
+  if (!publicKey) return res.status(503).json({ error: "Push not configured" })
+  res.json({ publicKey })
 })
-
-app.post(
-  "/api/couple/:code/push-subscribe",
-  requireDb,
-  asyncHandler(async (req, res) => {
-    const couple = await findCouple(req.params.code)
-    const subscription = req.body?.subscription
-    const role = String(req.body?.role || "him").toLowerCase() === "her" ? "her" : "him"
-    if (!subscription?.endpoint) {
-      return res.status(400).json({ error: "Missing push subscription" })
-    }
-
-    const field = role === "her" ? "herPushSubscriptions" : "pushSubscriptions"
-    const list = Array.isArray(couple[field]) ? [...couple[field]] : []
-    const idx = list.findIndex((s) => s.endpoint === subscription.endpoint)
-    if (idx >= 0) list[idx] = subscription
-    else list.push(subscription)
-
-    couple[field] = list
-    couple.markModified(field)
-    await couple.save()
-
-    res.json({ ok: true, role, devices: list.length })
-  }),
-)
-
-app.post(
-  "/api/couple/:code/push-test",
-  requireDb,
-  asyncHandler(async (req, res) => {
-    const role = String(req.body?.role || "him").toLowerCase() === "her" ? "her" : "him"
-    const result = await sendTestPush(req.params.code, role)
-    res.json(result)
-  }),
-)
-
-/** External cron can hit this (Render free sleep workaround) */
-app.post(
-  "/api/cron/notify",
-  asyncHandler(async (req, res) => {
-    if (CRON_SECRET && req.get("x-cron-secret") !== CRON_SECRET) {
-      return res.status(401).json({ error: "Unauthorized" })
-    }
-    const part = req.body?.part || req.query?.part
-    if (part === "her-reminder") {
-      const result = await notifyHerWriteReminders()
-      return res.json(result)
-    }
-    if (part !== "morning" && part !== "night") {
-      return res.status(400).json({
-        error: 'part must be "morning", "night", or "her-reminder"',
-      })
-    }
-    const result = await notifyPart(part)
-    res.json(result)
-  }),
-)
-
-/** GET variant for easy cron-job.org / EasyCron setup */
-app.get(
-  "/api/cron/notify",
-  asyncHandler(async (req, res) => {
-    const secret = req.query.secret || req.get("x-cron-secret")
-    if (CRON_SECRET && secret !== CRON_SECRET) {
-      return res.status(401).json({ error: "Unauthorized" })
-    }
-    const part = req.query.part
-    if (part === "her-reminder") {
-      return res.json(await notifyHerWriteReminders())
-    }
-    if (part !== "morning" && part !== "night") {
-      return res.status(400).json({
-        error: 'part must be "morning", "night", or "her-reminder"',
-      })
-    }
-    res.json(await notifyPart(part))
-  }),
-)
 
 app.post(
   "/api/couple",
@@ -150,7 +115,7 @@ app.post(
       code: couple.code,
       herName: couple.herName,
       hisName: couple.hisName,
-      deliveryCount: couple.deliveries.length,
+      deliveryCount: (couple.deliveries || []).length,
     })
   }),
 )
@@ -164,7 +129,9 @@ app.get(
       code: couple.code,
       herName: couple.herName,
       hisName: couple.hisName,
-      deliveryCount: couple.deliveries.length,
+      week: couple.week || [],
+      deliveries: sortDeliveries(couple.deliveries || []),
+      deliveryCount: (couple.deliveries || []).length,
     })
   }),
 )
@@ -188,16 +155,17 @@ app.put(
   asyncHandler(async (req, res) => {
     const couple = await findCouple(req.params.code)
     const week = Array.isArray(req.body?.week) ? req.body.week : []
-    couple.week = week
+    const deliveries = Array.isArray(req.body?.deliveries) ? req.body.deliveries : []
 
-    const incoming = Array.isArray(req.body?.deliveries) ? req.body.deliveries : []
-    const map = new Map(couple.deliveries.map((d) => [d.id, d]))
-    for (const item of incoming) {
-      if (!item?.id) continue
-      map.set(item.id, { ...(map.get(item.id) || {}), ...item })
-    }
-    couple.deliveries = sortDeliveries([...map.values()])
+    couple.week = week
     couple.markModified("week")
+
+    let list = Array.isArray(couple.deliveries) ? [...couple.deliveries] : []
+    for (const d of deliveries) {
+      if (!d) continue
+      list = upsertDelivery(list, d)
+    }
+    couple.deliveries = list
     couple.markModified("deliveries")
     await couple.save()
 
@@ -205,7 +173,8 @@ app.put(
       ok: true,
       code: couple.code,
       weekReady: week.filter((s) => s.done).length,
-      deliveryCount: couple.deliveries.length,
+      weekCount: week.length,
+      deliveryCount: list.length,
     })
   }),
 )
@@ -215,16 +184,11 @@ app.put(
   requireDb,
   asyncHandler(async (req, res) => {
     const couple = await findCouple(req.params.code)
-    const delivery = { ...req.body, id: req.params.id }
-    const idx = couple.deliveries.findIndex((d) => d.id === delivery.id)
-    if (idx >= 0) couple.deliveries[idx] = { ...couple.deliveries[idx], ...delivery }
-    else couple.deliveries.push(delivery)
-
-    couple.deliveries = sortDeliveries(couple.deliveries)
+    const delivery = { ...(req.body || {}), id: req.params.id }
+    couple.deliveries = upsertDelivery(couple.deliveries, delivery)
     couple.markModified("deliveries")
     await couple.save()
-
-    res.json({ ok: true, delivery })
+    res.json({ ok: true, id: delivery.id, delivery })
   }),
 )
 
@@ -237,7 +201,7 @@ app.get(
       code: couple.code,
       herName: couple.herName,
       hisName: couple.hisName,
-      deliveries: sortDeliveries(couple.deliveries),
+      deliveries: sortDeliveries(couple.deliveries || []),
     })
   }),
 )
@@ -247,25 +211,72 @@ app.get(
   requireDb,
   asyncHandler(async (req, res) => {
     const couple = await findCouple(req.params.code)
-    const today = req.query.date || new Date().toISOString().slice(0, 10)
-    const list = couple.deliveries || []
+    const today = req.query.date || indiaToday()
+    const list = sortDeliveries(couple.deliveries || [])
     const morning = list.find((d) => d.dateKey === today && d.part === "morning") || null
     const night = list.find((d) => d.dateKey === today && d.part === "night") || null
-    res.json({ date: today, morning, night })
+    res.json({ date: today, morning, night, deliveries: list })
   }),
 )
 
-function normalizeActivity(raw) {
-  const activity = raw && typeof raw === "object" ? raw : {}
-  return {
-    appOpens: Number(activity.appOpens) || 0,
-    lastOpenAt: activity.lastOpenAt || null,
-    reads:
-      activity.reads && typeof activity.reads === "object" && !Array.isArray(activity.reads)
-        ? activity.reads
-        : {},
-  }
-}
+app.post(
+  "/api/couple/:code/push-subscribe",
+  requireDb,
+  asyncHandler(async (req, res) => {
+    const couple = await findCouple(req.params.code)
+    const role = String(req.body?.role || "him").toLowerCase() === "her" ? "her" : "him"
+    const normalized = normalizeSubscription(req.body?.subscription)
+    if (!normalized) {
+      return res.status(400).json({
+        error: "Invalid push subscription. Allow notifications again from the Home Screen app.",
+      })
+    }
+
+    const field = role === "her" ? "herPushSubscriptions" : "pushSubscriptions"
+    const list = Array.isArray(couple[field]) ? [...couple[field]] : []
+    const clean = list.map(normalizeSubscription).filter(Boolean)
+    const idx = clean.findIndex((s) => s.endpoint === normalized.endpoint)
+    if (idx >= 0) clean[idx] = normalized
+    else clean.push(normalized)
+
+    couple[field] = clean
+    couple.markModified(field)
+    await couple.save()
+    res.json({ ok: true, role, devices: clean.length })
+  }),
+)
+
+app.post(
+  "/api/couple/:code/push-test",
+  requireDb,
+  asyncHandler(async (req, res) => {
+    const role = String(req.body?.role || "him").toLowerCase() === "her" ? "her" : "him"
+    const result = await sendTestPush(req.params.code, role)
+    res.json(result)
+  }),
+)
+
+/** How many phones are linked for push — used so her side can see if his alerts are on */
+app.get(
+  "/api/couple/:code/push-status",
+  requireDb,
+  asyncHandler(async (req, res) => {
+    const couple = await findCouple(req.params.code)
+    const himDevices = (Array.isArray(couple.pushSubscriptions) ? couple.pushSubscriptions : [])
+      .map(normalizeSubscription)
+      .filter(Boolean).length
+    const herDevices = (Array.isArray(couple.herPushSubscriptions) ? couple.herPushSubscriptions : [])
+      .map(normalizeSubscription)
+      .filter(Boolean).length
+    res.json({
+      code: couple.code,
+      himLinked: himDevices > 0,
+      herLinked: herDevices > 0,
+      himDevices,
+      herDevices,
+    })
+  }),
+)
 
 app.post(
   "/api/couple/:code/activity",
@@ -284,7 +295,7 @@ app.post(
       if (!deliveryId) {
         return res.status(400).json({ error: "deliveryId required for read" })
       }
-      const prev = activity.reads[deliveryId] || { count: 0, lastReadAt: null }
+      const prev = activity.reads[deliveryId] || { count: 0 }
       activity.reads[deliveryId] = {
         count: (Number(prev.count) || 0) + 1,
         lastReadAt: now,
@@ -304,18 +315,54 @@ app.post(
   }),
 )
 
+/** Compatibility aliases used by some clients */
+app.post(
+  "/api/couple/:code/activity/open",
+  requireDb,
+  asyncHandler(async (req, res) => {
+    req.body = { ...(req.body || {}), type: "open" }
+    const couple = await findCouple(req.params.code)
+    const activity = normalizeActivity(couple.activity)
+    activity.appOpens += 1
+    activity.lastOpenAt = new Date().toISOString()
+    couple.activity = activity
+    couple.markModified("activity")
+    await couple.save()
+    res.json({ ok: true, appOpens: activity.appOpens })
+  }),
+)
+
+app.post(
+  "/api/couple/:code/activity/read",
+  requireDb,
+  asyncHandler(async (req, res) => {
+    const couple = await findCouple(req.params.code)
+    const deliveryId = String(req.body?.deliveryId || req.body?.id || "").trim()
+    if (!deliveryId) return res.status(400).json({ error: "Missing deliveryId" })
+    const activity = normalizeActivity(couple.activity)
+    const prev = activity.reads[deliveryId] || { count: 0 }
+    activity.reads[deliveryId] = {
+      count: (Number(prev.count) || 0) + 1,
+      lastReadAt: new Date().toISOString(),
+      dateKey: req.body?.dateKey || prev.dateKey || "",
+      part: req.body?.part || prev.part || "",
+      dateLabel: req.body?.dateLabel || prev.dateLabel || "",
+      whenLabel: req.body?.whenLabel || prev.whenLabel || "",
+    }
+    couple.activity = activity
+    couple.markModified("activity")
+    await couple.save()
+    res.json({ ok: true, read: activity.reads[deliveryId] })
+  }),
+)
+
 app.get(
   "/api/couple/:code/activity",
   requireDb,
   asyncHandler(async (req, res) => {
     const couple = await findCouple(req.params.code)
     const activity = normalizeActivity(couple.activity)
-    const today = new Intl.DateTimeFormat("en-CA", {
-      timeZone: "Asia/Kolkata",
-      year: "numeric",
-      month: "2-digit",
-      day: "2-digit",
-    }).format(new Date())
+    const today = indiaToday()
 
     const readEntries = Object.entries(activity.reads).map(([id, info]) => ({
       id,
@@ -324,7 +371,9 @@ app.get(
       dateKey: info?.dateKey || "",
       part: info?.part || "",
       dateLabel: info?.dateLabel || "",
-      whenLabel: info?.whenLabel || "",
+      whenLabel:
+        info?.whenLabel ||
+        (info?.part === "night" ? "Night" : info?.part === "morning" ? "Morning" : ""),
     }))
 
     const currentReads = readEntries.filter((r) => r.dateKey === today)
@@ -348,22 +397,62 @@ app.get(
   }),
 )
 
+app.post(
+  "/api/cron/notify",
+  asyncHandler(async (req, res) => {
+    if (!authorizeCron(req)) return res.status(401).json({ error: "Unauthorized" })
+    const part = req.body?.part || req.query?.part
+    if (part === "her-reminder") return res.json(await notifyHerWriteReminders())
+    if (part !== "morning" && part !== "night") {
+      return res.status(400).json({
+        error: 'part must be "morning", "night", or "her-reminder"',
+      })
+    }
+    res.json(await notifyPart(part))
+  }),
+)
+
+app.get(
+  "/api/cron/notify",
+  asyncHandler(async (req, res) => {
+    if (!authorizeCron(req)) return res.status(401).json({ error: "Unauthorized" })
+    const part = req.query.part
+    if (part === "her-reminder") return res.json(await notifyHerWriteReminders())
+    if (part !== "morning" && part !== "night") {
+      return res.status(400).json({
+        error: 'part must be "morning", "night", or "her-reminder"',
+      })
+    }
+    res.json(await notifyPart(part))
+  }),
+)
+
 app.use((req, res, next) => {
-  if (req.path === "/" || req.path.endsWith(".html") || req.path === "/sw.js") {
+  if (req.path === "/" || req.path.endsWith(".html") || req.path === "/sw.js" || req.path === "/manifest.webmanifest") {
     res.set("Cache-Control", "no-store, no-cache, must-revalidate")
     res.set("Pragma", "no-cache")
   }
   next()
 })
+
 app.use(express.static(SITE_ROOT))
+
 app.get("/", (_req, res) => {
-  res.sendFile(path.join(SITE_ROOT, "index.html"))
+  res.sendFile(path.join(SITE_ROOT, "index.html"), (err) => {
+    if (err) {
+      res
+        .status(200)
+        .type("html")
+        .send(
+          "<!doctype html><title>The Blooms</title><h1>The Blooms backend is running</h1><p><a href='/api/health'>/api/health</a></p>",
+        )
+    }
+  })
 })
 
 app.use((err, _req, res, _next) => {
   console.error("API error:", err.message)
-  const status = err.status || 500
-  res.status(status).json({
+  res.status(err.status || 500).json({
     error: err.message || "Something went wrong. Please try again.",
   })
 })
@@ -374,28 +463,26 @@ async function start() {
   } catch (err) {
     console.error("MongoDB connection failed:", err.message)
     if (/whitelist|IP/i.test(err.message)) {
-      console.error(
-        "Fix: Atlas â†’ Network Access â†’ Add IP â†’ Allow Access from Anywhere (0.0.0.0/0)",
-      )
+      console.error("Fix: Atlas → Network Access → Allow Access from Anywhere (0.0.0.0/0)")
     } else {
-      console.error("Check backend/.env MONGODB_URI from MongoDB Atlas.")
+      console.error("Check backend/.env MONGODB_URI")
     }
   }
 
+  startNotificationScheduler()
+
   app.listen(PORT, () => {
-    // Redeploy bump 2026-09-18T12:29:59.5216695+05:30 — remember his couple code
-    console.log(`The Blooms running on http://localhost:${PORT}`)
+    console.log(`The Blooms backend on http://localhost:${PORT}`)
     console.log(`His side:     http://localhost:${PORT}/`)
     console.log(`Your side:    http://localhost:${PORT}/the-blooms.html`)
-    console.log(`Database:     ${isDbReady() ? "MongoDB connected" : "NOT connected â€” add MONGODB_URI"}`)
-    console.log(`Push:         ${pushEnabled ? "enabled (him 10/23, her 12/19 IST)" : "disabled"}`)
-    startNotificationScheduler()
+    console.log(`Health:       http://localhost:${PORT}/api/health`)
+    console.log(`Database:     ${isDbReady() ? "connected" : "NOT connected"}`)
+    console.log(`Push:         ${pushEnabled ? "enabled" : "disabled (set VAPID keys)"}`)
   })
 }
 
 start()
 
-// Do not crash the whole process on unexpected promise issues
 process.on("unhandledRejection", (err) => {
   console.error("Unhandled rejection:", err)
 })

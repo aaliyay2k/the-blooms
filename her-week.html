@@ -668,6 +668,16 @@
       <p class="progress" id="progress-text">0 of 14 ready</p>
       <div class="progress-bar" aria-hidden="true"><span id="progress-fill"></span></div>
 
+      <div class="activity-card" id="his-notify-card">
+        <h2>His morning &amp; night alerts</h2>
+        <p id="his-notify-status">
+          After he opens his link and taps Allow notifications, you’ll see it here.
+        </p>
+        <button type="button" class="btn btn-ghost" id="refresh-his-notify" style="margin-top: 0.75rem; width: 100%">
+          Refresh his alert status
+        </button>
+      </div>
+
       <div class="activity-card" id="her-notify-card">
         <h2>Your write reminders</h2>
         <p id="her-notify-status">
@@ -1102,6 +1112,37 @@
         return week.filter((s) => !s.done).length
       }
 
+      async function refreshHisNotifyStatus() {
+        const status = document.getElementById("his-notify-status")
+        if (!status) return
+        const code = BloomsStore.getCoupleCode()
+        if (!code) {
+          status.textContent = "Save your couple code first. Then you’ll see whether his phone is linked for 10:00 AM & 11:00 PM alerts."
+          return
+        }
+        try {
+          const base = BloomsStore.getApiBase()
+          const res = await fetch(
+            `${base}/api/couple/${encodeURIComponent(code)}/push-status`,
+            { cache: "no-store" },
+          )
+          if (!res.ok) throw new Error("Couldn’t check his alerts yet.")
+          const data = await res.json()
+          if (data.himLinked) {
+            const n = Number(data.himDevices) || 1
+            status.textContent =
+              n === 1
+                ? "His phone is linked for morning (10:00) and night (11:00) alerts."
+                : `${n} of his devices are linked for morning (10:00) and night (11:00) alerts.`
+          } else {
+            status.textContent =
+              "Not linked yet. Ask him to open his link, enter the code, tap Allow notifications, then Send test."
+          }
+        } catch (err) {
+          status.textContent = err.message || "Couldn’t check his alert status right now."
+        }
+      }
+
       async function refreshHerNotifyStatus() {
         const status = document.getElementById("her-notify-status")
         const btn = document.getElementById("enable-her-notify")
@@ -1118,32 +1159,32 @@
         if (testBtn) testBtn.style.display = ready ? "block" : "none"
 
         if (ready) {
-          status.textContent = `${leftLine} Reminders linked — 12:00 PM & 7:00 PM India time. Tap Send test reminder to check.`
-          btn.textContent = "Reminders linked"
+          status.textContent = `${leftLine} Reminders are on for this phone (12:00 PM & 7:00 PM). Tap Send test reminder to check.`
+          btn.style.display = "none"
           btn.disabled = true
+          btn.textContent = "Allow reminder notifications"
           return
         }
+
+        btn.style.display = "block"
+        btn.disabled = false
         if (!canPush) {
-          status.textContent = `${leftLine} On iPhone, notifications need Home Screen: Safari → Share → Add to Home Screen, open from the icon, then tap Allow.`
-          btn.textContent = "Allow reminder notifications"
-          btn.disabled = false
+          status.textContent = `${leftLine} On iPhone, add to Home Screen first, open from the icon, then tap Allow.`
+          btn.textContent = "How to enable reminders"
           return
         }
         if (permission === "denied") {
           status.textContent = `${leftLine} Notifications are blocked — allow them in phone settings, then tap again.`
-          btn.textContent = "Try reminders again"
-          btn.disabled = false
+          btn.textContent = "Try again"
           return
         }
         if (permission === "granted") {
           status.textContent = `${leftLine} Permission is on, but this phone is not linked yet. Tap below once.`
           btn.textContent = "Finish reminder setup"
-          btn.disabled = false
           return
         }
         status.textContent = `${leftLine} Tap below to allow 12:00 PM & 7:00 PM reminders on this phone.`
         btn.textContent = "Allow reminder notifications"
-        btn.disabled = false
       }
 
       function formatWhen(iso) {
@@ -1235,6 +1276,7 @@
           left > 0 ? `${done} of 14 ready · ${left} remaining to write` : `${done} of 14 ready`
         document.getElementById("progress-fill").style.width = `${(done / 14) * 100}%`
         refreshHerNotifyStatus()
+        refreshHisNotifyStatus()
         renderHisActivity()
 
         const list = document.getElementById("week-list")
@@ -1743,6 +1785,7 @@
         refreshPairUI()
         renderHisActivity()
         refreshHerNotifyStatus()
+        refreshHisNotifyStatus()
         BloomsStore.health().catch(() => {})
         toast("Unlocked — synced")
       }
@@ -1782,6 +1825,11 @@
         toast("Activity refreshed")
       })
 
+      document.getElementById("refresh-his-notify").addEventListener("click", async () => {
+        await refreshHisNotifyStatus()
+        toast("Alert status refreshed")
+      })
+
       document.getElementById("enable-her-notify").addEventListener("click", async () => {
         const status = document.getElementById("her-notify-status")
         const btn = document.getElementById("enable-her-notify")
@@ -1809,8 +1857,7 @@
           await refreshHerNotifyStatus()
           status.textContent = msg
         } finally {
-          const ready = await BloomsStore.isPushReady("her")
-          btn.disabled = ready
+          await refreshHerNotifyStatus()
         }
       })
 

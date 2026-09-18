@@ -661,7 +661,7 @@
 
       <div id="notify-card" class="slot" style="cursor:default;margin-bottom:0.75rem">
         <span class="slot-label">Notifications</span>
-        <p class="slot-title" style="font-size:1.15rem">Allow morning &amp; night alerts</p>
+        <p class="slot-title" id="notify-title" style="font-size:1.15rem">Allow morning &amp; night alerts</p>
         <p class="slot-meta" id="notify-meta">
           Tap Allow so your phone can ask permission. On iPhone, add The Blooms to Home Screen first, then open it from there.
         </p>
@@ -808,6 +808,7 @@
 
       async function refreshNotifyCard() {
         const card = document.getElementById("notify-card")
+        const title = document.getElementById("notify-title")
         const meta = document.getElementById("notify-meta")
         const btn = document.getElementById("enable-notify-btn")
         const testBtn = document.getElementById("test-notify-btn")
@@ -822,18 +823,22 @@
         if (testBtn) testBtn.style.display = ready ? "block" : "none"
 
         if (ready) {
+          if (title) title.textContent = "Morning & night alerts are on"
           meta.textContent =
-            "Linked to this phone. Tap Send test notification to check — morning (10:00) and night (11:00) alerts follow."
-          btn.textContent = "Notifications linked"
+            "This phone is linked. Tap Send test notification to confirm — then 10:00 AM and 11:00 PM alerts can arrive."
+          btn.style.display = "none"
           btn.disabled = true
-          if (installStatus) installStatus.textContent = "Notifications linked."
+          btn.textContent = "Allow notifications"
+          if (installStatus) installStatus.textContent = "This phone is linked for alerts."
           return
         }
 
+        if (title) title.textContent = "Allow morning & night alerts"
+        btn.style.display = "block"
         btn.disabled = false
         if (!canPush) {
           meta.textContent =
-            "Notifications are not available in a normal Safari tab. Add to Home Screen, open from that icon, then tap Allow."
+            "Not available in a normal Safari tab yet. Add to Home Screen, open from that icon, then tap Allow."
           btn.textContent = "How to enable"
           if (installStatus) {
             installStatus.textContent =
@@ -841,17 +846,17 @@
           }
         } else if (permission === "denied") {
           meta.textContent =
-            "Notifications were blocked earlier. In phone settings → allow notifications for the-blooms.onrender.com, then tap again."
-          btn.textContent = "Try notifications again"
+            "Notifications were blocked. In phone settings, allow notifications for this site, then tap below."
+          btn.textContent = "Try again"
           if (installStatus) installStatus.textContent = "Permission blocked — allow in phone settings, then retry."
         } else if (permission === "granted") {
           meta.textContent =
-            "Permission is on, but this phone is not linked yet. Tap below once to finish setup."
-          btn.textContent = "Finish notification setup"
-          if (installStatus) installStatus.textContent = "Tap to finish linking this phone."
+            "Permission is on, but this phone is not linked yet. Tap below once to finish."
+          btn.textContent = "Finish setup"
+          if (installStatus) installStatus.textContent = "Tap Finish setup to link this phone."
         } else {
           meta.textContent =
-            "Tap Allow — your phone will ask for permission for morning & night blooms."
+            "Tap Allow — your phone will ask for permission for morning and night blooms."
           btn.textContent = "Allow notifications"
           if (installStatus) installStatus.textContent = "Tap Allow notifications below."
         }
