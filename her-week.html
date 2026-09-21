@@ -664,16 +664,27 @@
     <section id="home" class="screen">
       <p class="brand">The Blooms</p>
       <p class="eyebrow">Your side</p>
-      <h1 id="week-title">Prepare next week</h1>
+      <h1 id="week-title">Prepare this week</h1>
       <p class="lede" id="week-range-lede">
         Make 14 soft deliveries — a bouquet + letter, note, or voice for each morning (10:00) and
         night (11:00 PM). Dates sync to his side in India time.
       </p>
       <p class="lede" id="names-lede" style="margin-top:0.35rem"></p>
 
-      <div class="kind-toggle" id="week-offset-toggle" role="tablist" aria-label="Which week to prepare" style="margin: 0.85rem 0 1rem">
-        <button type="button" data-week-offset="0">This week</button>
-        <button type="button" class="is-on" data-week-offset="1">Next week</button>
+      <div class="kind-toggle" id="week-offset-toggle" role="tablist" aria-label="Which week to prepare" style="margin: 0.85rem 0 0.55rem">
+        <button type="button" data-week-offset="0" class="is-on">This week</button>
+        <button type="button" data-week-offset="1">Next week</button>
+      </div>
+      <p class="count-line" id="week-switch-hint" style="margin: 0 0 0.85rem">
+        This week and next week save separately — switch anytime.
+      </p>
+
+      <div class="activity-card" id="week-complete-card" hidden>
+        <h2 id="week-complete-title">This week is ready</h2>
+        <p id="week-complete-body">All 14 slots are written. Start next week whenever you want — his side keeps getting today’s blooms.</p>
+        <button type="button" class="btn btn-primary" id="start-next-week" style="margin-top: 0.75rem; width: 100%">
+          Start next week
+        </button>
       </div>
 
       <div class="pair-box" id="pair-box">
@@ -1100,20 +1111,68 @@
       let editingId = null
       let draft = null
 
+      function weekButtonLabel(offset) {
+        const monday = mondayKeyForOffset(offset)
+        const sunday = BloomsStore.addDaysToKey(monday, 6)
+        const range = `${BloomsStore.shortDateKey(monday)} – ${BloomsStore.shortDateKey(sunday)}`
+        return offset === 1 ? `Next week · ${range}` : `This week · ${range}`
+      }
+
       function updateWeekRangeCopy() {
         const monday = week[0]?.dateKey || mondayKeyForOffset(weekOffset)
         const sunday = BloomsStore.addDaysToKey(monday, 6)
         const todayKey = BloomsStore.getTodayKey()
-        const label = weekOffset === 1 ? "Next week" : "This week"
+        const range = `${BloomsStore.shortDateKey(monday)} – ${BloomsStore.shortDateKey(sunday)}`
+        const done = doneCount()
+        const left = remainingCount()
+
         document.getElementById("week-title").textContent =
           weekOffset === 1 ? "Prepare next week" : "Prepare this week"
         document.getElementById("week-range-lede").textContent =
           weekOffset === 0
-            ? `${label}: ${BloomsStore.shortDateKey(monday)} – ${BloomsStore.shortDateKey(sunday)}. Write from ${BloomsStore.shortDateKey(todayKey)} onward — open Wednesday for your 12 letter if it’s there.`
-            : `${label}: ${BloomsStore.shortDateKey(monday)} – ${BloomsStore.shortDateKey(sunday)} (India time).`
+            ? `${range} (India time). Finish today’s empty slots first — past days can still be edited.`
+            : `${range} (India time). Write ahead so he always has something waiting.`
+
         document.querySelectorAll("#week-offset-toggle [data-week-offset]").forEach((btn) => {
-          btn.classList.toggle("is-on", Number(btn.getAttribute("data-week-offset")) === weekOffset)
+          const offset = Number(btn.getAttribute("data-week-offset")) === 0 ? 0 : 1
+          btn.classList.toggle("is-on", offset === weekOffset)
+          btn.textContent = weekButtonLabel(offset)
         })
+
+        const hint = document.getElementById("week-switch-hint")
+        if (hint) {
+          hint.textContent =
+            weekOffset === 0
+              ? left > 0
+                ? `${left} left this week · switch to next week anytime — both stay saved.`
+                : "This week is complete · open next week to keep writing ahead."
+              : done === 0
+                ? "Next week is empty — fill slots ahead of time."
+                : `${done} of 14 ready for next week · this week stays saved too.`
+        }
+
+        const completeCard = document.getElementById("week-complete-card")
+        const completeTitle = document.getElementById("week-complete-title")
+        const completeBody = document.getElementById("week-complete-body")
+        const startNext = document.getElementById("start-next-week")
+        if (completeCard && completeTitle && completeBody && startNext) {
+          if (weekOffset === 0 && left === 0) {
+            completeCard.hidden = false
+            completeTitle.textContent = "This week is ready"
+            completeBody.textContent =
+              "All 14 slots are written. Start next week whenever you want — he still gets today’s blooms on time."
+            startNext.hidden = false
+            startNext.textContent = "Start next week"
+          } else if (weekOffset === 1 && done === 0) {
+            completeCard.hidden = false
+            completeTitle.textContent = "Next week is ready to fill"
+            completeBody.textContent =
+              "You’re planning ahead. Add bouquets and words for each morning and night."
+            startNext.hidden = true
+          } else {
+            completeCard.hidden = true
+          }
+        }
       }
 
       function showScreen(id) {
@@ -1298,7 +1357,9 @@
         const done = doneCount()
         const left = remainingCount()
         document.getElementById("progress-text").textContent =
-          left > 0 ? `${done} of 14 ready · ${left} remaining to write` : `${done} of 14 ready`
+          left > 0
+            ? `${weekOffset === 1 ? "Next week" : "This week"} · ${done} of 14 ready · ${left} remaining`
+            : `${weekOffset === 1 ? "Next week" : "This week"} · ${done} of 14 ready`
         document.getElementById("progress-fill").style.width = `${(done / 14) * 100}%`
         refreshHerNotifyStatus()
         refreshHisNotifyStatus()
@@ -1933,6 +1994,10 @@
 
       document.querySelectorAll("#week-offset-toggle [data-week-offset]").forEach((btn) => {
         btn.addEventListener("click", () => setWeekOffset(btn.getAttribute("data-week-offset")))
+      })
+
+      document.getElementById("start-next-week")?.addEventListener("click", () => {
+        setWeekOffset(1)
       })
 
       document.getElementById("refresh-activity").addEventListener("click", async () => {
