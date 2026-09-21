@@ -624,7 +624,7 @@
       <p class="time-chip">For him</p>
       <h1 class="home-hello">Enter your couple code</h1>
       <p class="home-sub">
-        She created a code on her side. Type it each time you open The Blooms.
+        She created a code on her side. Enter it once — then your mornings and nights sync here.
       </p>
       <div
         id="his-couple-code"
@@ -645,6 +645,15 @@
           pointer-events: none;
         }
       </style>
+      <label class="home-sub" for="his-own-name" style="display:block;text-align:left;margin:0.25rem 0">Your name (optional)</label>
+      <input
+        id="his-own-name"
+        type="text"
+        maxlength="32"
+        placeholder="e.g. Aarav"
+        autocomplete="nickname"
+        style="width:100%;border:1px solid rgba(30,74,55,.2);border-radius:14px;padding:.85rem 1rem;font:inherit;margin:0 0 1rem;background:rgba(255,250,244,.9)"
+      />
       <button type="button" class="btn btn-primary" id="his-pair-btn">Open our garden</button>
       <p class="home-sub" id="his-pair-status" style="margin-top:1rem"></p>
     </section>
@@ -757,7 +766,7 @@
           <p class="message-kind" id="message-kind">Love letter</p>
           <p class="message-body" id="message-body"></p>
           <div id="message-audio-list" style="display:none;width:100%;margin-top:1rem"></div>
-          <p class="message-sign">— with love</p>
+          <p class="message-sign" id="message-sign">— with love</p>
         </article>
         <div class="actions">
           <button class="btn btn-primary" type="button" data-go="home">Keep this one</button>
@@ -765,16 +774,23 @@
       </div>
     </section>
 
-    <script src="./public/js/blooms-store.js?v=20260815a"></script>
+    <script src="./public/js/blooms-store.js?v=names-1"></script>
     <script>
       const FLOWER_BASE = "https://assets.pauwee.com/color/flowers"
       let activeDelivery = null
 
       function greeting() {
         const h = new Date().getHours()
-        if (h < 12) return "Good morning"
-        if (h < 18) return "Good afternoon"
-        return "Good evening"
+        const base = h < 12 ? "Good morning" : h < 18 ? "Good afternoon" : "Good evening"
+        const hisName = BloomsStore.getNames().hisName
+        return hisName ? `${base}, ${hisName}` : base
+      }
+
+      function applyHerSignature() {
+        const sign = document.getElementById("message-sign")
+        if (!sign) return
+        const herName = BloomsStore.getNames().herName
+        sign.textContent = herName ? `— ${herName}` : "— with love"
       }
 
       function showScreen(id) {
@@ -944,8 +960,8 @@
             statusEl.className = "slot-status is-waiting"
             metaEl.textContent =
               part === "morning"
-                ? "Waiting for today’s bouquet & words"
-                : "Waiting for tonight’s bouquet & words"
+                ? `Waiting for today’s bouquet & words${BloomsStore.getNames().herName ? ` from ${BloomsStore.getNames().herName}` : ""}`
+                : `Waiting for tonight’s bouquet & words${BloomsStore.getNames().herName ? ` from ${BloomsStore.getNames().herName}` : ""}`
             btn.dataset.empty = "1"
             return
           }
@@ -1029,6 +1045,7 @@
           audioList.style.display = "none"
           audioList.innerHTML = ""
         }
+        applyHerSignature()
       }
 
       function openDelivery(delivery, { ignoreSchedule = false } = {}) {
@@ -1162,11 +1179,17 @@
       async function enterHome(code) {
         const clean = String(code || "").trim().toUpperCase()
         BloomsStore.setCoupleCode(clean)
+        try {
+          await BloomsStore.fetchCouple()
+        } catch (_) {}
         BloomsStore.trackAppOpen()
         document.getElementById("pair").classList.remove("is-active")
         document.body.classList.remove("is-night-theme")
         document.getElementById("home").classList.add("is-active")
-        document.getElementById("home-couple-code").textContent = "Paired"
+        const { hisName } = BloomsStore.getNames()
+        document.getElementById("home-couple-code").textContent = hisName
+          ? `Paired · ${hisName}`
+          : "Paired"
         clearCoupleCodeField()
         await BloomsStore.pullInbox()
         refreshHome()
@@ -1230,6 +1253,10 @@
           }
         }
         await showPairScreen("Enter your couple code to open The Blooms.")
+        const nameInput = document.getElementById("his-own-name")
+        if (nameInput && !nameInput.value) {
+          nameInput.value = BloomsStore.getNames().hisName || ""
+        }
       }
 
       window.addEventListener("pageshow", () => {
@@ -1261,7 +1288,8 @@
           return
         }
         try {
-          await BloomsStore.pairCouple(code, { role: "him" })
+          const hisName = (document.getElementById("his-own-name")?.value || "").trim()
+          await BloomsStore.pairCouple(code, { role: "him", hisName })
           status.textContent = "Connected."
           await enterHome(code)
         } catch (err) {

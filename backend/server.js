@@ -1,4 +1,4 @@
-// Redeploy bump share-invite
+// Redeploy bump names-ui
 import cors from "cors"
 import dotenv from "dotenv"
 import express from "express"

@@ -636,6 +636,24 @@
           pointer-events: none;
         }
       </style>
+      <label class="pick-label" for="her-name-input" style="display:block;margin-top:0.35rem">Your name (optional)</label>
+      <input
+        id="her-name-input"
+        type="text"
+        maxlength="32"
+        placeholder="e.g. Aaliya"
+        autocomplete="nickname"
+        style="width:100%;border:1px solid rgba(30,74,55,.2);border-radius:14px;padding:.85rem 1rem;font:inherit;margin:.35rem 0 .65rem;background:rgba(255,250,244,.9)"
+      />
+      <label class="pick-label" for="his-name-input" style="display:block">His name (optional)</label>
+      <input
+        id="his-name-input"
+        type="text"
+        maxlength="32"
+        placeholder="e.g. Aarav"
+        autocomplete="nickname"
+        style="width:100%;border:1px solid rgba(30,74,55,.2);border-radius:14px;padding:.85rem 1rem;font:inherit;margin:.35rem 0 1rem;background:rgba(255,250,244,.9)"
+      />
       <button type="button" class="btn btn-primary" id="her-pair-btn" style="width:100%">Open my planner</button>
       <button type="button" class="btn btn-ghost" id="her-make-code-gate" style="width:100%;margin-top:0.55rem">
         Make a new code
@@ -651,6 +669,7 @@
         Make 14 soft deliveries — a bouquet + letter, note, or voice for each morning (10:00) and
         night (11:00 PM). Dates sync to his side in India time.
       </p>
+      <p class="lede" id="names-lede" style="margin-top:0.35rem"></p>
 
       <div class="kind-toggle" id="week-offset-toggle" role="tablist" aria-label="Which week to prepare" style="margin: 0.85rem 0 1rem">
         <button type="button" data-week-offset="0">This week</button>
@@ -814,7 +833,7 @@
 
     <div class="toast" id="toast">Saved</div>
 
-    <script src="./public/js/blooms-store.js?v=20260815a"></script>
+    <script src="./public/js/blooms-store.js?v=names-1"></script>
     <script>
       const LEGACY_STORAGE_KEY = "blooms:her-week-v2"
       const OFFSET_KEY = "blooms:plan-week-offset"
@@ -1768,6 +1787,36 @@
         }
       }
 
+      function readHerNameFields() {
+        return {
+          herName: (document.getElementById("her-name-input")?.value || "").trim(),
+          hisName: (document.getElementById("his-name-input")?.value || "").trim(),
+        }
+      }
+
+      function fillHerNameFields() {
+        const names = BloomsStore.getNames()
+        const herInput = document.getElementById("her-name-input")
+        const hisInput = document.getElementById("his-name-input")
+        if (herInput && !herInput.value) herInput.value = names.herName || ""
+        if (hisInput && !hisInput.value) hisInput.value = names.hisName || ""
+      }
+
+      function refreshNamesCopy() {
+        const el = document.getElementById("names-lede")
+        if (!el) return
+        const { herName, hisName } = BloomsStore.getNames()
+        if (herName && hisName) {
+          el.textContent = `${herName} → preparing blooms for ${hisName}.`
+        } else if (hisName) {
+          el.textContent = `Preparing blooms for ${hisName}.`
+        } else if (herName) {
+          el.textContent = `Signed as ${herName}.`
+        } else {
+          el.textContent = ""
+        }
+      }
+
       function refreshPairUI() {
         const status = document.getElementById("pair-status")
         const copyInvite = document.getElementById("copy-his-invite")
@@ -1776,6 +1825,7 @@
         const hasCode = Boolean(code && code.length >= 4)
         if (copyInvite) copyInvite.hidden = !hasCode
         if (copyCode) copyCode.hidden = !hasCode
+        refreshNamesCopy()
         BloomsStore.health()
           .then(() => {
             status.textContent = hasCode
@@ -1812,11 +1862,17 @@
           status.textContent = "Use at least 4 characters."
           return
         }
+        const names = readHerNameFields()
         status.textContent = "Connecting…"
         try {
-          await BloomsStore.pairCouple(clean, { role: "her" })
+          await BloomsStore.pairCouple(clean, {
+            role: "her",
+            herName: names.herName,
+            hisName: names.hisName,
+          })
         } catch (err) {
           BloomsStore.setCoupleCode(clean)
+          BloomsStore.setNames(names)
         }
         document.getElementById("pair").classList.remove("is-active")
         document.getElementById("home").classList.add("is-active")
@@ -1939,6 +1995,7 @@
       }
 
       // Always ask for couple code when her side opens
+      fillHerNameFields()
       showHerPairGate("Enter your couple code to open The Blooms.")
       renderHome()
     </script>

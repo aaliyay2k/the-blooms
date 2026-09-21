@@ -6,6 +6,7 @@ window.BloomsStore = (function () {
   const COUPLE_KEY = "blooms:couple-code"
   const API_KEY = "blooms:api-url"
   const PUSH_OK_KEY = "blooms:push-subscribed"
+  const NAMES_KEY = "blooms:couple-names"
 
   // Local API while developing. Change later when you deploy.
   const DEFAULT_API = "http://localhost:8787"
@@ -313,17 +314,67 @@ window.BloomsStore = (function () {
 
   async function pairCouple(code, names = {}) {
     const clean = String(code || "").trim().toUpperCase()
+    const herName = String(names.herName || "").trim()
+    const hisName = String(names.hisName || "").trim()
     const data = await api("/api/couple", {
       method: "POST",
       body: JSON.stringify({
         code: clean,
         role: names.role || "her",
-        herName: names.herName || "",
-        hisName: names.hisName || "",
+        herName,
+        hisName,
       }),
     })
     setCoupleCode(data.code)
+    setNames({
+      herName: data.herName || herName,
+      hisName: data.hisName || hisName,
+    })
     return data
+  }
+
+  function getNames() {
+    const names = read(NAMES_KEY, {})
+    return {
+      herName: String(names?.herName || "").trim(),
+      hisName: String(names?.hisName || "").trim(),
+    }
+  }
+
+  function setNames( partial = {}) {
+    const prev = getNames()
+    const next = {
+      herName:
+        partial.herName !== undefined ? String(partial.herName || "").trim() : prev.herName,
+      hisName:
+        partial.hisName !== undefined ? String(partial.hisName || "").trim() : prev.hisName,
+    }
+    write(NAMES_KEY, next)
+    return next
+  }
+
+  async function fetchCouple() {
+    const code = getCoupleCode()
+    if (!code) return null
+    const data = await api(`/api/couple/${encodeURIComponent(code)}`)
+    if (data?.herName !== undefined || data?.hisName !== undefined) {
+      setNames({
+        herName: data.herName || "",
+        hisName: data.hisName || "",
+      })
+    }
+    return data
+  }
+
+  async function saveNames( partial = {}) {
+    const code = getCoupleCode()
+    if (!code) throw new Error("Enter the couple code first.")
+    const merged = setNames(partial)
+    return pairCouple(code, {
+      role: partial.role || "her",
+      herName: merged.herName,
+      hisName: merged.hisName,
+    })
   }
 
   async function pullInbox() {
@@ -551,6 +602,10 @@ window.BloomsStore = (function () {
     getMonday,
     getCoupleCode,
     setCoupleCode,
+    getNames,
+    setNames,
+    fetchCouple,
+    saveNames,
     getApiBase,
     setApiBase,
     pairCouple,
