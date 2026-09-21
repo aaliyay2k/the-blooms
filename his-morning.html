@@ -1195,6 +1195,30 @@
       }
 
       async function boot() {
+        const params = new URLSearchParams(window.location.search || "")
+        const fromLink = String(params.get("code") || "")
+          .trim()
+          .toUpperCase()
+          .replace(/\s+/g, "")
+
+        if (fromLink.length >= 4) {
+          try {
+            await BloomsStore.pairCouple(fromLink, { role: "him" })
+            // Clean the invite param so refreshes feel normal
+            try {
+              const cleanUrl = `${window.location.pathname}${window.location.hash || ""}`
+              window.history.replaceState({}, "", cleanUrl)
+            } catch (_) {}
+            await enterHome(fromLink)
+            return
+          } catch (err) {
+            const el = document.getElementById("his-couple-code")
+            if (el) el.textContent = fromLink
+            await showPairScreen(err.message || "Wrong couple code. Try again.")
+            return
+          }
+        }
+
         const saved = BloomsStore.getCoupleCode()
         if (saved && saved.length >= 4) {
           try {
@@ -1202,7 +1226,6 @@
             await enterHome(saved)
             return
           } catch (_) {
-            // Saved code no longer works — ask again, keep field empty
             BloomsStore.setCoupleCode("")
           }
         }

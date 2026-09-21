@@ -658,9 +658,15 @@
       </div>
 
       <div class="pair-box" id="pair-box">
-        <p class="pick-label">Couple code (connected this session)</p>
+        <p class="pick-label">Couple code</p>
         <p class="count-line" id="pair-status">Enter code on open to sync.</p>
-        <button type="button" class="btn btn-ghost" id="change-her-code" style="width:100%;margin-top:0.55rem">
+        <button type="button" class="btn btn-primary" id="copy-his-invite" style="width:100%;margin-top:0.55rem" hidden>
+          Copy his invite link
+        </button>
+        <button type="button" class="btn btn-ghost" id="copy-couple-code" style="width:100%;margin-top:0.45rem" hidden>
+          Copy couple code
+        </button>
+        <button type="button" class="btn btn-ghost" id="change-her-code" style="width:100%;margin-top:0.45rem">
           Change couple code
         </button>
       </div>
@@ -1732,17 +1738,52 @@
         saveCurrent().catch(() => toast("Saved on this phone — sync retry later"))
       })
 
+      function hisInviteLink(code) {
+        const clean = String(code || "").trim().toUpperCase()
+        const base = `${window.location.origin}/his-morning.html`
+        return clean ? `${base}?code=${encodeURIComponent(clean)}` : base
+      }
+
+      async function copyText(value, okMessage) {
+        const text = String(value || "")
+        if (!text) return
+        try {
+          await navigator.clipboard.writeText(text)
+          toast(okMessage || "Copied")
+        } catch (_) {
+          const area = document.createElement("textarea")
+          area.value = text
+          area.setAttribute("readonly", "")
+          area.style.position = "fixed"
+          area.style.left = "-9999px"
+          document.body.appendChild(area)
+          area.select()
+          try {
+            document.execCommand("copy")
+            toast(okMessage || "Copied")
+          } catch (err) {
+            toast("Couldn’t copy — select and copy manually")
+          }
+          area.remove()
+        }
+      }
+
       function refreshPairUI() {
         const status = document.getElementById("pair-status")
+        const copyInvite = document.getElementById("copy-his-invite")
+        const copyCode = document.getElementById("copy-couple-code")
         const code = BloomsStore.getCoupleCode()
+        const hasCode = Boolean(code && code.length >= 4)
+        if (copyInvite) copyInvite.hidden = !hasCode
+        if (copyCode) copyCode.hidden = !hasCode
         BloomsStore.health()
           .then(() => {
-            status.textContent = code
-              ? `Connected · ${code}`
+            status.textContent = hasCode
+              ? `Connected · ${code} — copy his invite link below`
               : "Enter your couple code to sync."
           })
           .catch(() => {
-            status.textContent = code
+            status.textContent = hasCode
               ? `Code ${code} · reconnecting…`
               : "Enter your couple code to sync."
           })
@@ -1787,8 +1828,26 @@
         refreshHerNotifyStatus()
         refreshHisNotifyStatus()
         BloomsStore.health().catch(() => {})
-        toast("Unlocked — synced")
+        toast("Unlocked — copy his invite link to share")
       }
+
+      document.getElementById("copy-his-invite").addEventListener("click", () => {
+        const code = BloomsStore.getCoupleCode()
+        if (!code) {
+          toast("Enter your couple code first")
+          return
+        }
+        copyText(hisInviteLink(code), "His invite link copied")
+      })
+
+      document.getElementById("copy-couple-code").addEventListener("click", () => {
+        const code = BloomsStore.getCoupleCode()
+        if (!code) {
+          toast("Enter your couple code first")
+          return
+        }
+        copyText(code, "Couple code copied")
+      })
 
       document.getElementById("her-pair-btn").addEventListener("click", () => {
         const code = (document.getElementById("her-couple-code").innerText || "").replace(/\s+/g, "").trim()
@@ -1809,7 +1868,7 @@
         const code = `${word}-${num}`
         document.getElementById("her-couple-code").textContent = code
         document.getElementById("her-pair-status").textContent =
-          "New code ready — tap Open my planner, then share this code with him once."
+          "New code ready — tap Open my planner, then copy his invite link."
       })
 
       document.getElementById("change-her-code").addEventListener("click", () => {
