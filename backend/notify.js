@@ -1,20 +1,43 @@
 import cron from "node-cron"
 import webpush from "web-push"
+import path from "path"
+import { fileURLToPath } from "url"
+import dotenv from "dotenv"
 import { Couple, findCouple, isDbReady, sortDeliveries } from "./db.js"
 
+dotenv.config({ path: path.join(path.dirname(fileURLToPath(import.meta.url)), ".env") })
+
+function env(...keys) {
+  for (const key of keys) {
+    const value = process.env[key]
+    if (value && String(value).trim()) return String(value).trim()
+  }
+  return ""
+}
+
 function configureWebPush() {
-  const publicKey = process.env.VAPID_PUBLIC_KEY
-  const privateKey = process.env.VAPID_PRIVATE_KEY
-  const subject = process.env.VAPID_SUBJECT || "mailto:theblooms@example.com"
+  const publicKey = env("VAPID_PUBLIC_KEY")
+  const privateKey = env("VAPID_PRIVATE_KEY")
+  const subject = env("VAPID_SUBJECT") || "mailto:theblooms@example.com"
   if (!publicKey || !privateKey) {
-    console.warn("VAPID keys missing — push notifications disabled until .env is set.")
+    console.warn("VAPID keys missing — push disabled until env is set.")
     return false
   }
-  webpush.setVapidDetails(subject, publicKey, privateKey)
-  return true
+  try {
+    webpush.setVapidDetails(subject, publicKey, privateKey)
+    console.log("Web push configured")
+    return true
+  } catch (err) {
+    console.error("VAPID setup failed:", err.message)
+    return false
+  }
 }
 
 export const pushEnabled = configureWebPush()
+
+export function getVapidPublicKey() {
+  return env("VAPID_PUBLIC_KEY")
+}
 
 function todayKeyInIndia(date = new Date()) {
   return new Intl.DateTimeFormat("en-CA", {
@@ -37,11 +60,46 @@ function indiaMinutesNow(date = new Date()) {
   return hour * 60 + minute
 }
 
-function subscriptionsForRole(couple, role) {
-  if (role === "her") {
-    return Array.isArray(couple.herPushSubscriptions) ? couple.herPushSubscriptions : []
+export function normalizeSubscription(raw) {
+  if (!raw || typeof raw !== "object") return null
+  const endpoint = raw.endpoint
+  const keys = raw.keys || {}
+  const p256dh = keys.p256dh || keys.p256DH
+  const auth = keys.auth
+  if (!endpoint || !p256dh || !auth) return null
+  return {
+    endpoint: String(endpoint),
+    expirationTime: raw.expirationTime ?? null,
+    keys: {
+      p256dh: String(p256dh),
+      auth: String(auth),
+    },
   }
-  return Array.isArray(couple.pushSubscriptions) ? couple.pushSubscriptions : []
+}
+
+function collectSubscriptions(couple, role) {
+  const bags = []
+  if (role === "her") {
+    bags.push(couple.herPushSubscriptions)
+    try {
+      const obj = couple.toObject ? couple.toObject() : couple
+      for (const [key, value] of Object.entries(obj || {})) {
+        if (/her/i.test(key) && /push/i.test(key) && Array.isArray(value)) bags.push(value)
+      }
+    } catch (_) {}
+  } else {
+    bags.push(couple.pushSubscriptions)
+  }
+
+  const byEndpoint = new Map()
+  for (const bag of bags) {
+    if (!Array.isArray(bag)) continue
+    for (const item of bag) {
+      const n = normalizeSubscription(item)
+      if (n) byEndpoint.set(n.endpoint, n)
+    }
+  }
+  return [...byEndpoint.values()]
 }
 
 function alreadySent(couple, key) {
@@ -56,47 +114,62 @@ async function markSent(couple, key) {
   await couple.save()
 }
 
-async function sendToRole(couple, role, payload) {
-  if (!pushEnabled) return { sent: 0, removed: 0 }
-  const list = subscriptionsForRole(couple, role)
-  if (!list.length) return { sent: 0, removed: 0 }
+async function saveRoleSubscriptions(couple, role, list) {
+  if (role === "her") {
+    couple.herPushSubscriptions = list
+    couple.markModified("herPushSubscriptions")
+  } else {
+    couple.pushSubscriptions = list
+    couple.markModified("pushSubscriptions")
+  }
+  await couple.save()
+}
 
-  const body = JSON.stringify(payload)
+async function sendToRole(couple, role, payload) {
+  if (!pushEnabled) return { sent: 0, removed: 0, errors: ["push-disabled"] }
+  const list = collectSubscriptions(couple, role)
+  if (!list.length) return { sent: 0, removed: 0, errors: ["no-subscriptions"] }
+
+  const body = JSON.stringify({
+    title: payload.title || "The Blooms",
+    body: payload.body || "",
+    url: payload.url || "/",
+    part: payload.part || "",
+  })
+
   const keep = []
+  const errors = []
   let sent = 0
   let removed = 0
 
   for (const sub of list) {
     try {
-      await webpush.sendNotification(sub, body)
+      await webpush.sendNotification(sub, body, {
+        TTL: 60 * 60 * 24,
+        urgency: "high",
+      })
       keep.push(sub)
       sent += 1
     } catch (err) {
       const code = err?.statusCode
-      if (code === 404 || code === 410) {
+      const msg = err?.body || err?.message || String(err)
+      console.error(`Push failed (${role}) status=${code}:`, msg)
+      if (code === 404 || code === 410 || code === 401 || code === 403) {
         removed += 1
+        if (code === 401 || code === 403) errors.push("vapid-or-auth-failed")
       } else {
         keep.push(sub)
-        console.error("Push failed:", err.message)
+        errors.push(String(msg))
       }
     }
   }
 
-  const field = role === "her" ? "herPushSubscriptions" : "pushSubscriptions"
-  if (removed > 0 || keep.length !== list.length) {
-    couple[field] = keep
-    couple.markModified(field)
-    await couple.save()
-  }
-
-  return { sent, removed }
+  await saveRoleSubscriptions(couple, role, keep)
+  return { sent, removed, errors, devices: list.length }
 }
 
 export async function notifyPart(part, { force = false } = {}) {
-  if (!isDbReady()) {
-    console.warn("Skip notify — database not ready")
-    return { ok: false, reason: "db" }
-  }
+  if (!isDbReady()) return { ok: false, reason: "db" }
 
   const dateKey = todayKeyInIndia()
   const sentKey = `${dateKey}-${part}`
@@ -104,6 +177,7 @@ export async function notifyPart(part, { force = false } = {}) {
   let totalSent = 0
   let couplesNotified = 0
   let skipped = 0
+  let noDelivery = 0
 
   for (const couple of couples) {
     if (!force && alreadySent(couple, sentKey)) {
@@ -114,7 +188,10 @@ export async function notifyPart(part, { force = false } = {}) {
     const delivery = sortDeliveries(couple.deliveries || []).find(
       (d) => d.dateKey === dateKey && d.part === part,
     )
-    if (!delivery) continue
+    if (!delivery) {
+      noDelivery += 1
+      continue
+    }
 
     const title = part === "morning" ? "Good morning 🌸" : "Good night 🌙"
     const body =
@@ -137,21 +214,16 @@ export async function notifyPart(part, { force = false } = {}) {
   }
 
   console.log(
-    `Notify ${part} ${dateKey}: ${couplesNotified} couples, ${totalSent} pushes, ${skipped} already sent`,
+    `Notify ${part} ${dateKey}: ${couplesNotified} couples, ${totalSent} pushes, skipped=${skipped}, noDelivery=${noDelivery}`,
   )
-  return { ok: true, dateKey, part, couplesNotified, totalSent, skipped }
+  return { ok: true, dateKey, part, couplesNotified, totalSent, skipped, noDelivery }
 }
 
-/** Her phone: remaining notes reminder at 12:00 and 19:00 IST */
 export async function notifyHerWriteReminders(windowKey = null, { force = false } = {}) {
-  if (!isDbReady()) {
-    console.warn("Skip her reminder — database not ready")
-    return { ok: false, reason: "db" }
-  }
+  if (!isDbReady()) return { ok: false, reason: "db" }
 
   const dateKey = todayKeyInIndia()
   const mins = indiaMinutesNow()
-  // Auto-pick window if not specified: after 19:00 use her-19, else her-12
   const key =
     windowKey ||
     (mins >= 19 * 60 ? `${dateKey}-her-19` : mins >= 12 * 60 ? `${dateKey}-her-12` : null)
@@ -170,17 +242,14 @@ export async function notifyHerWriteReminders(windowKey = null, { force = false 
 
     const week = Array.isArray(couple.week) ? couple.week : []
     if (!week.length) continue
-
     const remaining = week.filter((s) => !s.done).length
     if (remaining <= 0) continue
 
     const title =
       remaining === 1 ? "1 note remaining to write" : `${remaining} notes remaining to write`
-    const body = "Open The Blooms and finish today’s empty slots for him."
-
     const result = await sendToRole(couple, "her", {
       title,
-      body,
+      body: "Open The Blooms and finish today’s empty slots for him.",
       url: "/the-blooms.html",
       part: "her-reminder",
     })
@@ -191,103 +260,74 @@ export async function notifyHerWriteReminders(windowKey = null, { force = false 
     }
   }
 
-  console.log(`Her write reminders ${key}: ${couplesNotified} couples, ${totalSent} pushes, ${skipped} already sent`)
+  console.log(`Her reminders ${key}: ${couplesNotified} couples, ${totalSent} pushes`)
   return { ok: true, part: "her-reminder", key, couplesNotified, totalSent, skipped }
 }
 
 export function startNotificationScheduler() {
-  if (!pushEnabled) return
+  if (!pushEnabled) {
+    console.warn("Push scheduler not started — VAPID keys missing")
+    return
+  }
 
-  cron.schedule(
-    "0 10 * * *",
-    () => {
-      notifyPart("morning").catch((err) => console.error(err))
-    },
-    { timezone: "Asia/Kolkata" },
-  )
-
-  cron.schedule(
-    "0 23 * * *",
-    () => {
-      notifyPart("night").catch((err) => console.error(err))
-    },
-    { timezone: "Asia/Kolkata" },
-  )
-
+  cron.schedule("0 10 * * *", () => notifyPart("morning").catch(console.error), {
+    timezone: "Asia/Kolkata",
+  })
+  cron.schedule("0 23 * * *", () => notifyPart("night").catch(console.error), {
+    timezone: "Asia/Kolkata",
+  })
   cron.schedule(
     "0 12 * * *",
-    () => {
-      notifyHerWriteReminders(`${todayKeyInIndia()}-her-12`).catch((err) => console.error(err))
-    },
+    () => notifyHerWriteReminders(`${todayKeyInIndia()}-her-12`).catch(console.error),
     { timezone: "Asia/Kolkata" },
   )
-
   cron.schedule(
     "0 19 * * *",
-    () => {
-      notifyHerWriteReminders(`${todayKeyInIndia()}-her-19`).catch((err) => console.error(err))
-    },
+    () => notifyHerWriteReminders(`${todayKeyInIndia()}-her-19`).catch(console.error),
     { timezone: "Asia/Kolkata" },
   )
 
-  console.log(
-    "Notification schedule ready: him 10:00 & 23:00; her reminders 12:00 & 19:00 Asia/Kolkata",
-  )
+  console.log("Schedule: him 10:00 & 23:00; her 12:00 & 19:00 Asia/Kolkata")
 }
 
-/**
- * Render free tier sleeps — when anyone wakes the server, send anything that is already due.
- */
+/** Send anything already due (used after Render wakes). */
 export async function catchUpDueNotifications() {
   if (!pushEnabled || !isDbReady()) return { ok: false, reason: "unavailable" }
-
   const mins = indiaMinutesNow()
   const dateKey = todayKeyInIndia()
   const results = {}
-
-  if (mins >= 10 * 60) {
-    results.morning = await notifyPart("morning")
-  }
-  if (mins >= 23 * 60) {
-    results.night = await notifyPart("night")
-  }
+  if (mins >= 10 * 60) results.morning = await notifyPart("morning")
+  if (mins >= 23 * 60) results.night = await notifyPart("night")
   if (mins >= 12 * 60 && mins < 19 * 60) {
     results.her = await notifyHerWriteReminders(`${dateKey}-her-12`)
   }
-  if (mins >= 19 * 60) {
-    results.her = await notifyHerWriteReminders(`${dateKey}-her-19`)
-  }
-
+  if (mins >= 19 * 60) results.her = await notifyHerWriteReminders(`${dateKey}-her-19`)
   return { ok: true, dateKey, mins, results }
 }
 
-/** Immediate test push to one couple (him or her devices). */
 export async function sendTestPush(code, role = "him") {
   if (!isDbReady()) throw Object.assign(new Error("Database not ready"), { status: 503 })
-  if (!pushEnabled) throw Object.assign(new Error("Push not configured"), { status: 503 })
+  if (!pushEnabled) throw Object.assign(new Error("Push not configured on server"), { status: 503 })
 
   const couple = await findCouple(code)
-
   const who = role === "her" ? "her" : "him"
   const result = await sendToRole(couple, who, {
     title: "The Blooms — test",
     body:
       who === "her"
-        ? "Reminders are working. You’ll get a ping when notes are still left."
-        : "Alerts are working. You’ll get morning (10:00) and night (11:00) pings.",
+        ? "Reminders work! Keep the app on your Home Screen."
+        : "Alerts work! Keep The Blooms on your Home Screen.",
     url: who === "her" ? "/the-blooms.html" : "/",
     part: "test",
   })
 
   if (result.sent === 0) {
-    throw Object.assign(
-      new Error(
-        who === "him"
-          ? "No phone linked yet. On his phone: open from Home Screen, enter code, tap Allow notifications."
-          : "No phone linked yet. On your phone: Add to Home Screen (iPhone), open from the icon, enter code, tap Allow reminders.",
-      ),
-      { status: 400 },
-    )
+    const hint = result.errors?.includes("vapid-or-auth-failed")
+      ? "Old notification link expired. Tap Allow notifications again on the phone."
+      : who === "him"
+        ? "No phone linked. iPhone: Safari → Share → Add to Home Screen → open icon → Allow. Android: Chrome → Allow."
+        : "No phone linked. iPhone: Add to Home Screen first, then Allow reminders."
+    throw Object.assign(new Error(hint), { status: 400, details: result })
   }
 
   return { ok: true, role: who, ...result }

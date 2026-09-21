@@ -1,10 +1,12 @@
 import dns from "dns"
 import dotenv from "dotenv"
 import mongoose from "mongoose"
+import path from "path"
+import { fileURLToPath } from "url"
 
-dotenv.config()
+const __dirname = path.dirname(fileURLToPath(import.meta.url))
+dotenv.config({ path: path.join(__dirname, ".env") })
 
-// Windows / some networks break Node's default DNS for mongodb+srv
 try {
   dns.setDefaultResultOrder("ipv4first")
   dns.setServers(["8.8.8.8", "1.1.1.1"])
@@ -29,7 +31,7 @@ const CoupleSchema = new mongoose.Schema(
       }),
     },
   },
-  { timestamps: true },
+  { timestamps: true, strict: false },
 )
 
 export const Couple = mongoose.models.Couple || mongoose.model("Couple", CoupleSchema)
@@ -40,19 +42,28 @@ export function isDbReady() {
   return mongoose.connection.readyState === 1
 }
 
-/** If SRV DNS fails, fall back to direct shard hosts from env */
-function buildUri() {
-  const primary = process.env.MONGODB_URI
-  const fallback = process.env.MONGODB_URI_STANDARD
-  return { primary, fallback }
+export function normalizeCode(raw) {
+  return String(raw || "")
+    .trim()
+    .toUpperCase()
+    .replace(/\s+/g, "")
+}
+
+export function sortDeliveries(list) {
+  return [...(list || [])].sort((a, b) => {
+    const da = String(a?.dateKey || "")
+    const db = String(b?.dateKey || "")
+    if (da !== db) return da < db ? 1 : -1
+    if (a?.part === b?.part) return 0
+    return a?.part === "night" ? -1 : 1
+  })
 }
 
 export async function connectDb() {
-  const { primary, fallback } = buildUri()
+  const primary = process.env.MONGODB_URI || process.env.DATABASE_URL || ""
+  const fallback = process.env.MONGODB_URI_STANDARD || ""
   if (!primary && !fallback) {
-    throw new Error(
-      "MONGODB_URI is missing. Add it to backend/.env (MongoDB Atlas connection string).",
-    )
+    throw new Error("Set MONGODB_URI in backend/.env (MongoDB Atlas connection string)")
   }
 
   if (isDbReady()) return mongoose.connection
@@ -60,19 +71,18 @@ export async function connectDb() {
 
   mongoose.set("strictQuery", true)
 
-  const options = {
+  const opts = {
     serverSelectionTimeoutMS: 20000,
     maxPoolSize: 10,
     family: 4,
   }
 
   connecting = (async () => {
-    const attempts = [primary, fallback].filter(Boolean)
     let lastError
-    for (const uri of attempts) {
+    for (const uri of [primary, fallback].filter(Boolean)) {
       try {
-        await mongoose.connect(uri, options)
-        console.log("MongoDB connected (durable storage ready)")
+        await mongoose.connect(uri, opts)
+        console.log("MongoDB connected")
         return mongoose.connection
       } catch (err) {
         lastError = err
@@ -92,13 +102,6 @@ export async function connectDb() {
   }
 }
 
-export function normalizeCode(rawCode) {
-  return String(rawCode || "")
-    .trim()
-    .toUpperCase()
-    .replace(/\s+/g, "")
-}
-
 export async function findCouple(rawCode) {
   const code = normalizeCode(rawCode)
   if (!code || code.length < 4) {
@@ -106,7 +109,6 @@ export async function findCouple(rawCode) {
     error.status = 400
     throw error
   }
-
   const couple = await Couple.findOne({ code })
   if (!couple) {
     const error = new Error("Wrong couple code. Ask her for the correct one.")
@@ -116,7 +118,7 @@ export async function findCouple(rawCode) {
   return couple
 }
 
-/** Only she creates a space. He must join an existing code. */
+/** She creates the space; he must join an existing code. */
 export async function getOrCreateCouple(rawCode) {
   const code = normalizeCode(rawCode)
   if (!code || code.length < 4) {
@@ -135,14 +137,9 @@ export async function getOrCreateCouple(rawCode) {
       deliveries: [],
       pushSubscriptions: [],
       herPushSubscriptions: [],
+      notifySent: {},
+      activity: { appOpens: 0, lastOpenAt: null, reads: {} },
     })
   }
   return couple
-}
-
-export function sortDeliveries(list) {
-  return [...list].sort((a, b) => {
-    if (a.dateKey === b.dateKey) return a.part === "night" ? -1 : 1
-    return a.dateKey < b.dateKey ? 1 : -1
-  })
 }
