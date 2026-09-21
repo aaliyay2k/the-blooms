@@ -202,7 +202,7 @@ export async function notifyPart(part, { force = false } = {}) {
     const result = await sendToRole(couple, "him", {
       title,
       body,
-      url: "/",
+      url: "/his-morning.html",
       part,
       dateKey,
     })
@@ -317,7 +317,7 @@ export async function sendTestPush(code, role = "him") {
       who === "her"
         ? "Reminders work! Keep the app on your Home Screen."
         : "Alerts work! Keep The Blooms on your Home Screen.",
-    url: who === "her" ? "/the-blooms.html" : "/",
+    url: who === "her" ? "/the-blooms.html" : "/his-morning.html",
     part: "test",
   })
 

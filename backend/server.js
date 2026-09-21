@@ -473,7 +473,8 @@ async function start() {
 
   app.listen(PORT, () => {
     console.log(`The Blooms backend on http://localhost:${PORT}`)
-    console.log(`His side:     http://localhost:${PORT}/`)
+    console.log(`Homepage:     http://localhost:${PORT}/`)
+    console.log(`His side:     http://localhost:${PORT}/his-morning.html`)
     console.log(`Your side:    http://localhost:${PORT}/the-blooms.html`)
     console.log(`Health:       http://localhost:${PORT}/api/health`)
     console.log(`Database:     ${isDbReady() ? "connected" : "NOT connected"}`)

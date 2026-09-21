@@ -1,19 +1,217 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-    <meta name="theme-color" content="#1e4a37" />
+    <meta
+      name="description"
+      content="The Blooms — morning and night bouquets, letters, and voice notes for two."
+    />
+    <meta name="theme-color" content="#1f4a38" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-title" content="The Blooms" />
     <link rel="manifest" href="/manifest.webmanifest" />
     <link rel="apple-touch-icon" href="./public/apple-touch-icon.png" />
     <link rel="icon" type="image/svg+xml" href="./public/favicon.svg" />
     <title>The Blooms</title>
-    <meta http-equiv="refresh" content="0; url=./his-morning.html" />
-    <script>location.replace("./his-morning.html")</script>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,650&family=Figtree:wght@400;550;650&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      :root {
+        --ink: #14241c;
+        --leaf: #1f4a38;
+        --leaf-soft: #2f6a4f;
+        --mist: #dcebe3;
+        --paper: #fff8f1;
+        --blush: #d98978;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      html,
+      body {
+        margin: 0;
+        min-height: 100%;
+      }
+
+      body {
+        font-family: Figtree, sans-serif;
+        color: var(--paper);
+        background: #0f1c16;
+      }
+
+      .hero {
+        position: relative;
+        min-height: 100dvh;
+        display: grid;
+        align-items: end;
+        overflow: hidden;
+        isolation: isolate;
+      }
+
+      .hero-media {
+        position: absolute;
+        inset: 0;
+        z-index: -2;
+        background:
+          url("./public/bouquets/custom-1.png") center 28% / cover no-repeat,
+          linear-gradient(160deg, #1a3328, #3a2a24);
+        transform: scale(1.06);
+        animation: drift 18s ease-in-out infinite alternate;
+      }
+
+      .hero-shade {
+        position: absolute;
+        inset: 0;
+        z-index: -1;
+        background:
+          linear-gradient(180deg, rgba(15, 28, 22, 0.18) 0%, rgba(15, 28, 22, 0.42) 42%, rgba(15, 28, 22, 0.88) 100%),
+          radial-gradient(ellipse 80% 55% at 70% 20%, rgba(217, 137, 120, 0.18), transparent 60%);
+      }
+
+      .hero-inner {
+        width: min(34rem, calc(100% - 2.4rem));
+        margin: 0 auto;
+        padding: 2.4rem 0 calc(2.2rem + env(safe-area-inset-bottom));
+      }
+
+      .brand {
+        margin: 0;
+        font-family: Fraunces, Georgia, serif;
+        font-weight: 650;
+        font-size: clamp(2.6rem, 9vw, 3.6rem);
+        letter-spacing: -0.03em;
+        line-height: 0.95;
+        opacity: 0;
+        transform: translateY(18px);
+        animation: rise 0.9s cubic-bezier(0.22, 1, 0.36, 1) 0.1s forwards;
+      }
+
+      .headline {
+        margin: 1rem 0 0;
+        max-width: 16ch;
+        font-family: Fraunces, Georgia, serif;
+        font-weight: 500;
+        font-size: clamp(1.45rem, 4.6vw, 1.85rem);
+        line-height: 1.2;
+        letter-spacing: -0.02em;
+        color: rgba(255, 248, 241, 0.96);
+        opacity: 0;
+        transform: translateY(18px);
+        animation: rise 0.9s cubic-bezier(0.22, 1, 0.36, 1) 0.28s forwards;
+      }
+
+      .support {
+        margin: 0.85rem 0 0;
+        max-width: 28ch;
+        font-size: 1.02rem;
+        line-height: 1.45;
+        font-weight: 400;
+        color: rgba(255, 248, 241, 0.78);
+        opacity: 0;
+        transform: translateY(18px);
+        animation: rise 0.9s cubic-bezier(0.22, 1, 0.36, 1) 0.42s forwards;
+      }
+
+      .cta {
+        display: grid;
+        gap: 0.7rem;
+        margin-top: 1.65rem;
+        opacity: 0;
+        transform: translateY(18px);
+        animation: rise 0.9s cubic-bezier(0.22, 1, 0.36, 1) 0.58s forwards;
+      }
+
+      .cta a {
+        display: grid;
+        place-items: center;
+        min-height: 3.35rem;
+        padding: 0.9rem 1.2rem;
+        border-radius: 999px;
+        text-decoration: none;
+        font-weight: 650;
+        font-size: 1.02rem;
+        letter-spacing: 0.01em;
+        transition: transform 0.25s ease, background 0.25s ease, color 0.25s ease;
+      }
+
+      .cta a:hover {
+        transform: translateY(-2px);
+      }
+
+      .cta a:active {
+        transform: translateY(0);
+      }
+
+      .cta-primary {
+        background: var(--paper);
+        color: var(--leaf);
+      }
+
+      .cta-primary:hover {
+        background: #fff;
+      }
+
+      .cta-secondary {
+        background: transparent;
+        color: var(--paper);
+        box-shadow: inset 0 0 0 1.5px rgba(255, 248, 241, 0.55);
+      }
+
+      .cta-secondary:hover {
+        background: rgba(255, 248, 241, 0.1);
+      }
+
+      @keyframes rise {
+        to {
+          opacity: 1;
+          transform: translateY(0);
+        }
+      }
+
+      @keyframes drift {
+        from {
+          transform: scale(1.06) translate3d(0, 0, 0);
+        }
+        to {
+          transform: scale(1.12) translate3d(-1.5%, -1%, 0);
+        }
+      }
+
+      @media (prefers-reduced-motion: reduce) {
+        .hero-media,
+        .brand,
+        .headline,
+        .support,
+        .cta {
+          animation: none;
+          opacity: 1;
+          transform: none;
+        }
+      }
+    </style>
   </head>
   <body>
-    <p><a href="./his-morning.html">Open The Blooms</a></p>
+    <main class="hero" aria-label="The Blooms">
+      <div class="hero-media" aria-hidden="true"></div>
+      <div class="hero-shade" aria-hidden="true"></div>
+      <div class="hero-inner">
+        <p class="brand">The Blooms</p>
+        <h1 class="headline">Morning and night, made for two.</h1>
+        <p class="support">
+          She plans the bouquets and words. He opens them when the day softens.
+        </p>
+        <div class="cta">
+          <a class="cta-primary" href="./the-blooms.html">I’m her — open my planner</a>
+          <a class="cta-secondary" href="./his-morning.html">I’m him — open my garden</a>
+        </div>
+      </div>
+    </main>
   </body>
 </html>
