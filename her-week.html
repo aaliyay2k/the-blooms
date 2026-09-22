@@ -759,9 +759,9 @@
 
       <div class="actions" style="margin-top: 1rem">
         <button type="button" class="btn btn-ghost" id="fill-next">Continue next empty</button>
-        <a class="btn btn-ghost" href="./his-morning.html" style="text-align: center; text-decoration: none"
-          >See his side</a
-        >
+        <button type="button" class="btn btn-ghost" id="share-his-invite-footer" style="width:100%">
+          Share his invite link
+        </button>
       </div>
     </section>
 
@@ -1223,7 +1223,7 @@
               "Not linked yet. Ask him to open his link, enter the code, tap Allow notifications, then Send test."
           }
         } catch (err) {
-          status.textContent = err.message || "Couldn’t check his alert status right now."
+          status.textContent = err.message || "Couldn’t check his alerts just now. Tap refresh in a moment."
         }
       }
 
@@ -1296,7 +1296,7 @@
           stats.hidden = true
           details.innerHTML = ""
           summary.textContent =
-            "Save your couple code to see how many times he opened the link and read your messages."
+            "Enter your couple code to see when he opens the link and reads your messages."
           return
         }
 
@@ -1311,7 +1311,7 @@
           const lastOpen = formatWhen(data.lastOpenAt)
           summary.textContent = lastOpen
             ? `He last opened the link ${lastOpen}.`
-            : "Waiting for him to open the link with your couple code."
+            : "He hasn’t opened his link yet — share his invite when you’re ready."
 
           const lines = []
           const current = Array.isArray(data.currentReads) ? data.currentReads : []
@@ -1329,7 +1329,7 @@
                 )
               })
           } else {
-            lines.push(`<li>No reads on today’s messages yet.</li>`)
+            lines.push(`<li>No reads on today’s messages yet — that’s okay.</li>`)
           }
 
           if (past.length) {
@@ -1348,7 +1348,7 @@
         } catch (err) {
           stats.hidden = true
           details.innerHTML = ""
-          summary.textContent = err.message || "Couldn’t load his activity yet."
+          summary.textContent = err.message || "Couldn’t load his activity just now. Try refresh in a moment."
         }
       }
 
@@ -1392,7 +1392,7 @@
         const isPast = slot.dateKey && slot.dateKey < todayKey
         const when = slot.part === "morning" ? "Morning · 10:00" : "Night · 11:00 PM"
         const dateHint = slot.dateLabel || (slot.dateKey ? BloomsStore.formatDateKey(slot.dateKey) : "")
-        const state = slot.done ? "Ready" : isPast ? "Past · tap to edit" : "Tap to create"
+        const state = slot.done ? "Ready" : isPast ? "Past · tap to edit" : "Tap to write"
         const kindLabel =
           slot.kind === "letter"
             ? "letter"
@@ -1815,7 +1815,9 @@
 
       document.getElementById("to-preview").addEventListener("click", openPreview)
       document.getElementById("save-slot").addEventListener("click", () => {
-        saveCurrent().catch(() => toast("Saved on this phone — sync retry later"))
+        saveCurrent().catch(() =>
+          toast("Saved on this phone — we’ll sync when the connection is back"),
+        )
       })
 
       function hisInviteLink(code) {
@@ -2028,11 +2030,12 @@
             status.textContent = "Test sent — if you got it, 12:00 & 19:00 reminders will work."
           } catch (testErr) {
             toast("Linked — test failed")
-            status.textContent = "Linked, but test failed: " + (testErr.message || "try Send test reminder")
+            status.textContent =
+              "Linked on this phone, but the test didn’t send. Tap Send test reminder again in a moment."
           }
           await refreshHerNotifyStatus()
         } catch (err) {
-          const msg = err.message || "Couldn’t enable reminders."
+          const msg = err.message || "Couldn’t turn on reminders. Check notification permission and try again."
           status.textContent = msg
           await refreshHerNotifyStatus()
           status.textContent = msg
@@ -2052,12 +2055,23 @@
             status.textContent = "Test sent — check your notification shade."
             toast("Test reminder sent")
           } catch (err) {
-            status.textContent = err.message || "Test failed."
+            status.textContent =
+              err.message || "Test didn’t send. Check permission, then try again."
           } finally {
             testHerNotify.disabled = false
           }
         })
       }
+
+      document.getElementById("share-his-invite-footer")?.addEventListener("click", () => {
+        const code = BloomsStore.getCoupleCode()
+        if (!code) {
+          toast("Enter your couple code first")
+          showHerPairGate("Enter your couple code first.")
+          return
+        }
+        copyText(hisInviteLink(code), "His invite link copied — send it to him")
+      })
 
       // Always ask for couple code when her side opens
       fillHerNameFields()

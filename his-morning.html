@@ -956,12 +956,17 @@
           const btn = document.getElementById(`slot-${part}`)
 
           if (!d) {
-            statusEl.textContent = "Not here yet"
+            statusEl.textContent = "Nothing yet"
             statusEl.className = "slot-status is-waiting"
+            const who = BloomsStore.getNames().herName
             metaEl.textContent =
               part === "morning"
-                ? `Waiting for today’s bouquet & words${BloomsStore.getNames().herName ? ` from ${BloomsStore.getNames().herName}` : ""}`
-                : `Waiting for tonight’s bouquet & words${BloomsStore.getNames().herName ? ` from ${BloomsStore.getNames().herName}` : ""}`
+                ? who
+                  ? `${who} hasn’t saved this morning’s bloom yet`
+                  : "She hasn’t saved this morning’s bloom yet"
+                : who
+                  ? `${who} hasn’t saved tonight’s bloom yet`
+                  : "She hasn’t saved tonight’s bloom yet"
             btn.dataset.empty = "1"
             return
           }
@@ -1086,7 +1091,7 @@
         if (!d) {
           const label = part === "morning" ? "This morning" : "Tonight"
           document.getElementById("past-list").innerHTML = `
-            <li class="empty-garden">${label} isn’t saved yet. When she prepares it, it will show up here with the date.</li>`
+            <li class="empty-garden">${label} isn’t ready yet. Come back after she saves it — it’ll show up here with the date.</li>`
           showScreen("past")
           return
         }
@@ -1099,7 +1104,7 @@
         const opened = new Set(BloomsStore.getOpened())
 
         if (!inbox.length) {
-          list.innerHTML = `<li class="empty-garden">Nothing saved yet. When she sends a bouquet and note, it will appear here with the date.</li>`
+          list.innerHTML = `<li class="empty-garden">Your garden is still empty. When she sends a bouquet and note, it will appear here.</li>`
           return
         }
 
@@ -1213,7 +1218,7 @@
           })
           .catch(() => {
             document.getElementById("his-pair-status").textContent =
-              "Can't reach the garden right now. Check your connection and try again."
+              "Can't reach The Blooms right now. Check your connection and try again."
           })
       }
 
@@ -1237,7 +1242,9 @@
           } catch (err) {
             const el = document.getElementById("his-couple-code")
             if (el) el.textContent = fromLink
-            await showPairScreen(err.message || "Wrong couple code. Try again.")
+            await showPairScreen(
+              err.message || "That invite didn’t work. Ask her for a fresh couple code.",
+            )
             return
           }
         }
@@ -1284,7 +1291,7 @@
         const code = readCoupleCodeField()
         const status = document.getElementById("his-pair-status")
         if (code.length < 4) {
-          status.textContent = "Ask her for the couple code."
+          status.textContent = "Ask her for your couple code — it’s at least 4 characters."
           return
         }
         try {
@@ -1293,7 +1300,8 @@
           status.textContent = "Connected."
           await enterHome(code)
         } catch (err) {
-          status.textContent = err.message || "Wrong couple code. Try again."
+          status.textContent =
+            err.message || "That code didn’t work. Double-check it with her and try again."
         }
       })
 
